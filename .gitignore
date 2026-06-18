@@ -1,0 +1,23 @@
+# Compiled binaries
+server
+cmd/server/server
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Runtime files
+.run-logs/
+.run.pids
+
+# Tool metadata / cache
+.codegraph/
+.reasonix/
+
+# Generated report
+SOFTWARE_REPORT.md
+
+# Frontend build artifacts (web/ has its own .gitignore too)
+web/node_modules/
+web/dist/
