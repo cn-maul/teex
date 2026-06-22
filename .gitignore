@@ -1,5 +1,7 @@
 # Compiled binaries
 /server
+/server-linux
+/server.exe
 /myapp.exe
 /teex-linux-*
 /teex-windows-*
