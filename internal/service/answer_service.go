@@ -60,16 +60,25 @@ func compareAnswers(correct, userAnswer, questionType string) bool {
 	case "judge":
 		// 判断题：直接比较
 		return correct == userAnswer
+	case "fill":
+		// 填空题：去除首尾空格后比较
+		return strings.TrimSpace(correct) == strings.TrimSpace(userAnswer)
 	default:
 		// 单选题：直接比较
 		return correct == userAnswer
 	}
 }
 
-// sortedCompare 排序后比较（用于多选题）
+// sortedCompare 排序后比较（用于多选题，逐个去除元素空格）
 func sortedCompare(a, b string) bool {
 	aList := strings.Split(a, ",")
 	bList := strings.Split(b, ",")
+	for i := range aList {
+		aList[i] = strings.TrimSpace(aList[i])
+	}
+	for i := range bList {
+		bList[i] = strings.TrimSpace(bList[i])
+	}
 	sort.Strings(aList)
 	sort.Strings(bList)
 	return strings.Join(aList, ",") == strings.Join(bList, ",")
@@ -95,58 +104,70 @@ type BatchAnswerItem struct {
 	Duration   int    `json:"duration"`
 }
 
-// SubmitBatchAnswersWithSession 批量提交答案并结束考试场次
+// SubmitBatchAnswersWithSession 批量提交答案并结束考试场次（批量查询+批量写入）
 func SubmitBatchAnswersWithSession(sessionID uint, answers []BatchAnswerItem) ([]AnswerResult, error) {
+	if len(answers) == 0 {
+		return nil, nil
+	}
+
+	// 1. 收集所有 question_id
+	ids := make([]uint, len(answers))
+	for i, a := range answers {
+		ids[i] = a.QuestionID
+	}
+
+	// 2. 批量查询题目
+	questionMap, err := repository.BatchGetQuestions(ids)
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch get questions: %w", err)
+	}
+
+	// 3. 在内存中比对答案并构建批量写入数据
 	var results []AnswerResult
+	var userAnswers []model.UserAnswer
 	correctCount := 0
 	totalDuration := 0
 
 	for _, a := range answers {
-		result, err := SubmitAnswerWithSession(sessionID, a.QuestionID, a.UserInput, a.Duration)
-		if err != nil {
-			return nil, fmt.Errorf("failed to submit answer for question %d: %w", a.QuestionID, err)
+		question, ok := questionMap[a.QuestionID]
+		if !ok {
+			return nil, fmt.Errorf("question %d not found", a.QuestionID)
 		}
-		results = append(results, *result)
-		if result.IsCorrect {
+
+		isCorrect := compareAnswers(question.Answer, a.UserInput, question.Type)
+
+		results = append(results, AnswerResult{
+			IsCorrect:     isCorrect,
+			CorrectAnswer: question.Answer,
+			Analysis:      question.Analysis,
+			UserInput:     a.UserInput,
+		})
+
+		userAnswers = append(userAnswers, model.UserAnswer{
+			QuestionID:    a.QuestionID,
+			ExamSessionID: sessionID,
+			UserInput:     a.UserInput,
+			IsCorrect:     isCorrect,
+			Duration:      a.Duration,
+		})
+
+		if isCorrect {
 			correctCount++
 		}
 		totalDuration += a.Duration
 	}
 
-	// 结束考试场次
+	// 4. 批量写入答题记录
+	if err := repository.BatchCreateAnswers(userAnswers); err != nil {
+		return nil, fmt.Errorf("failed to batch create answers: %w", err)
+	}
+
+	// 5. 结束考试场次
 	if sessionID > 0 {
 		_ = repository.FinishSession(sessionID, correctCount, totalDuration)
 	}
 
 	return results, nil
-}
-
-// SubmitAnswerWithSession 提交答案并关联场次
-func SubmitAnswerWithSession(sessionID uint, questionID uint, userInput string, duration int) (*AnswerResult, error) {
-	question, err := repository.GetQuestion(questionID)
-	if err != nil {
-		return nil, fmt.Errorf("question not found: %w", err)
-	}
-
-	isCorrect := compareAnswers(question.Answer, userInput, question.Type)
-
-	answer := &model.UserAnswer{
-		QuestionID:    questionID,
-		ExamSessionID: sessionID,
-		UserInput:     userInput,
-		IsCorrect:     isCorrect,
-		Duration:      duration,
-	}
-	if err := repository.SaveAnswer(answer); err != nil {
-		return nil, fmt.Errorf("failed to save answer: %w", err)
-	}
-
-	return &AnswerResult{
-		IsCorrect:     isCorrect,
-		CorrectAnswer: question.Answer,
-		Analysis:      question.Analysis,
-		UserInput:     userInput,
-	}, nil
 }
 
 // GetSession 获取考试场次详情
@@ -164,22 +185,4 @@ func GetSessionAnswers(sessionID uint) ([]model.UserAnswer, error) {
 	return repository.GetSessionAnswers(sessionID)
 }
 
-// GetModuleStats 获取模块统计
-func GetModuleStats(moduleID uint) (*repository.StatsResult, error) {
-	return repository.GetModuleStats(moduleID)
-}
 
-// GetOverallStats 获取全局统计
-func GetOverallStats() (*repository.StatsResult, error) {
-	return repository.GetOverallStats()
-}
-
-// GetRecentAnswers 获取最近的答题记录
-func GetRecentAnswers(limit int) ([]model.UserAnswer, error) {
-	return repository.GetRecentAnswers(limit)
-}
-
-// ClearAllRecords 清除所有答题记录
-func ClearAllRecords() error {
-	return repository.ClearAllRecords()
-}

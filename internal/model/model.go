@@ -60,14 +60,6 @@ type ExamSession struct {
 	Module       *Module    `gorm:"foreignKey:ModuleID" json:"module,omitempty"`
 }
 
-// Favorite 收藏
-type Favorite struct {
-	ID         uint      `gorm:"primaryKey" json:"id"`
-	QuestionID uint      `gorm:"uniqueIndex" json:"question_id"`
-	CreatedAt  time.Time `json:"created_at"`
-	Question   *Question `gorm:"foreignKey:QuestionID" json:"question,omitempty"`
-}
-
 // ModuleWithStats 模块+统计信息（用于前端展示）
 type ModuleWithStats struct {
 	Module

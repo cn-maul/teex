@@ -1,27 +1,17 @@
 package service
 
 import (
+	"fmt"
+	"sync"
+	"time"
+
 	"exam-quiz/internal/model"
 	"exam-quiz/internal/repository"
 )
 
-// GetExamTypes 获取所有考试类型（含模块列表）
+// GetExamTypes 获取所有考试类型（不含模块列表，前端通过 GetExamModules 获取）
 func GetExamTypes() ([]model.ExamType, error) {
-	exams, err := repository.ListExamTypes()
-	if err != nil {
-		return nil, err
-	}
-
-	// 为每个考试类型加载模块
-	for i := range exams {
-		modules, err := repository.GetModulesByExamID(exams[i].ID)
-		if err != nil {
-			return nil, err
-		}
-		exams[i].Modules = modules
-	}
-
-	return exams, nil
+	return repository.ListExamTypes()
 }
 
 // GetExamType 获取单个考试类型
@@ -29,31 +19,9 @@ func GetExamType(id uint) (*model.ExamType, error) {
 	return repository.GetExamType(id)
 }
 
-// GetModulesByExamID 获取某考试类型下的模块列表（含题目数）
+// GetModulesByExamID 获取某考试类型下的模块列表（含题目数，单次查询）
 func GetModulesByExamID(examTypeID uint) ([]model.ModuleWithStats, error) {
-	modules, err := repository.GetModulesByExamID(examTypeID)
-	if err != nil {
-		return nil, err
-	}
-
-	var result []model.ModuleWithStats
-	for _, mod := range modules {
-		questionCount, err := repository.CountQuestionsByModule(mod.ID)
-		if err != nil {
-			return nil, err
-		}
-		unanswered, err := repository.CountUnansweredByModule(mod.ID)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, model.ModuleWithStats{
-			Module:        mod,
-			QuestionCount: questionCount,
-			Unanswered:    unanswered,
-		})
-	}
-
-	return result, nil
+	return repository.GetModulesByExamIDWithStats(examTypeID)
 }
 
 // CreateExamType 创建考试类型
@@ -88,7 +56,25 @@ func DeleteModule(id uint) error {
 
 // FullImportData 完整导入数据结构
 type FullImportData struct {
-	ExamTypes []model.ExamType `json:"exam_types"`
+	ExamTypes []FullImportExamType `json:"exam_types"`
+}
+
+// FullImportExamType 导入用的考试类型
+type FullImportExamType struct {
+	model.ExamType
+	Modules []FullImportModule `json:"modules,omitempty"`
+}
+
+// FullImportModule 导入用的模块
+type FullImportModule struct {
+	model.Module
+	Questions []FullImportQuestion `json:"questions,omitempty"`
+}
+
+// FullImportQuestion 导入用的题目
+type FullImportQuestion struct {
+	ModuleName string `json:"module_name"` // 通过模块名匹配
+	model.Question
 }
 
 // FullImportResult 导入结果
@@ -123,7 +109,7 @@ func ExportAllData() (map[string]interface{}, error) {
 	}, nil
 }
 
-// ImportFullData 导入完整数据
+// ImportFullData 导入完整数据（考试类型 + 模块 + 题目）
 func ImportFullData(data FullImportData) (*FullImportResult, error) {
 	result := &FullImportResult{}
 
@@ -134,12 +120,18 @@ func ImportFullData(data FullImportData) (*FullImportResult, error) {
 			Remark: exam.Remark,
 		}
 		if err := repository.CreateExamType(&newExam); err != nil {
-			// 跳过已存在的
-			continue
+			// 尝试查找已存在的
+			existing, lookupErr := repository.GetExamTypeByName(exam.Name)
+			if lookupErr == nil {
+				newExam = *existing
+			} else {
+				continue
+			}
+		} else {
+			result.ExamTypesCreated++
 		}
-		result.ExamTypesCreated++
 
-		// 创建模块
+		// 创建模块和题目
 		for _, mod := range exam.Modules {
 			newMod := model.Module{
 				Name:       mod.Name,
@@ -147,11 +139,101 @@ func ImportFullData(data FullImportData) (*FullImportResult, error) {
 				Sort:       mod.Sort,
 			}
 			if err := repository.CreateModule(&newMod); err != nil {
-				continue
+				// 尝试查找已存在的
+				existing, lookupErr := repository.GetModuleByNameAndExamID(mod.Name, newExam.ID)
+				if lookupErr == nil {
+					newMod = *existing
+				} else {
+					continue
+				}
+			} else {
+				result.ModulesCreated++
 			}
-			result.ModulesCreated++
+
+			// 创建题目
+			for _, q := range mod.Questions {
+				newQ := q.Question
+				newQ.ModuleID = newMod.ID // 更新为新模块的 ID
+				if err := repository.CreateQuestion(&newQ); err != nil {
+					continue
+				}
+				result.QuestionsCreated++
+			}
 		}
 	}
 
 	return result, nil
+}
+
+// ====== 缓存层 ======
+
+var (
+	statsCache sync.Map
+)
+
+type cacheEntry struct {
+	data      interface{}
+	expiresAt time.Time
+}
+
+const cacheTTL = 30 * time.Second
+
+func getFromCache(key string) (interface{}, bool) {
+	if val, ok := statsCache.Load(key); ok {
+		entry := val.(cacheEntry)
+		if time.Now().Before(entry.expiresAt) {
+			return entry.data, true
+		}
+		statsCache.Delete(key)
+	}
+	return nil, false
+}
+
+func setCache(key string, data interface{}) {
+	statsCache.Store(key, cacheEntry{
+		data:      data,
+		expiresAt: time.Now().Add(cacheTTL),
+	})
+}
+
+// GetModuleStats 获取模块统计（带缓存）
+func GetModuleStats(moduleID uint) (*repository.StatsResult, error) {
+	cacheKey := "module_stats:" + fmt.Sprint(moduleID)
+	if cached, ok := getFromCache(cacheKey); ok {
+		return cached.(*repository.StatsResult), nil
+	}
+
+	stats, err := repository.GetModuleStats(moduleID)
+	if err != nil {
+		return nil, err
+	}
+
+	setCache(cacheKey, stats)
+	return stats, nil
+}
+
+// GetOverallStats 获取全局统计（带缓存）
+func GetOverallStats() (*repository.StatsResult, error) {
+	cacheKey := "overall_stats"
+	if cached, ok := getFromCache(cacheKey); ok {
+		return cached.(*repository.StatsResult), nil
+	}
+
+	stats, err := repository.GetOverallStats()
+	if err != nil {
+		return nil, err
+	}
+
+	setCache(cacheKey, stats)
+	return stats, nil
+}
+
+// GetRecentAnswers 获取最近的答题记录
+func GetRecentAnswers(limit int) ([]model.UserAnswer, error) {
+	return repository.GetRecentAnswers(limit)
+}
+
+// ClearAllRecords 清除所有答题记录
+func ClearAllRecords() error {
+	return repository.ClearAllRecords()
 }

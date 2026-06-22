@@ -10,6 +10,7 @@ import (
 	"exam-quiz/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // ListQuestions 查询题目列表
@@ -70,7 +71,11 @@ func GetQuestion(c *gin.Context) {
 
 	question, err := service.GetQuestion(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "题目不存在"})
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "题目不存在"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": question})
@@ -86,6 +91,10 @@ func CreateQuestion(c *gin.Context) {
 
 	// 验证模块是否存在
 	if _, err := repository.GetModule(question.ModuleID); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "模块不存在"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "模块不存在"})
 		return
 	}
@@ -126,6 +135,16 @@ func UpdateQuestion(c *gin.Context) {
 		return
 	}
 
+	// 检查是否存在
+	if _, err := service.GetQuestion(uint(id)); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "题目不存在"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
+		return
+	}
+
 	var question model.Question
 	if err := c.ShouldBindJSON(&question); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效"})
@@ -147,6 +166,16 @@ func DeleteQuestion(c *gin.Context) {
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的题目 ID"})
+		return
+	}
+
+	// 检查是否存在
+	if _, err := service.GetQuestion(uint(id)); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "题目不存在"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
 		return
 	}
 
@@ -217,5 +246,3 @@ func ImportQuestions(c *gin.Context) {
 		"invalid_count": invalidCount,
 	})
 }
-
-

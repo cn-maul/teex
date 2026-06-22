@@ -18,8 +18,15 @@ var DB *gorm.DB
 // Init 初始化 SQLite 数据库
 func Init(dbPath string) error {
 	var err error
+
+	// GORM 日志级别由环境变量 GORM_LOG 控制
+	logLevel := logger.Silent
+	if os.Getenv("GORM_LOG") == "true" {
+		logLevel = logger.Info
+	}
+
 	DB, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: logger.Default.LogMode(logLevel),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to connect database: %w", err)
@@ -46,7 +53,6 @@ func Init(dbPath string) error {
 		&model.Module{},
 		&model.Question{},
 		&model.UserAnswer{},
-		&model.Favorite{},
 		&model.ExamSession{},
 	)
 	if err != nil {

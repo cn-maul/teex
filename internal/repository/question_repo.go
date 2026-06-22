@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"math/rand"
+
 	"exam-quiz/internal/database"
 	"exam-quiz/internal/model"
 	"strings"
@@ -61,6 +63,19 @@ func ListQuestions(filter QuestionFilter) ([]model.Question, int64, error) {
 	return questions, total, err
 }
 
+// randomOffset 随机返回一个合法的 offset，用于替代 ORDER BY RANDOM()
+func randomOffset(db *gorm.DB, query *gorm.DB, count int) (int, error) {
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return 0, err
+	}
+	if total == 0 {
+		return 0, nil
+	}
+	offset := rand.Intn(int(total))
+	return offset, nil
+}
+
 // GetQuestion 获取单个题目
 func GetQuestion(id uint) (*model.Question, error) {
 	var question model.Question
@@ -68,13 +83,15 @@ func GetQuestion(id uint) (*model.Question, error) {
 	return &question, err
 }
 
-// GetRandomQuestions 随机获取题目
+// GetRandomQuestions 随机获取题目（offset 方式，避免 ORDER BY RANDOM() 性能问题）
 func GetRandomQuestions(moduleID uint, count int) ([]model.Question, error) {
 	var questions []model.Question
-	err := database.DB.Where("module_id = ?", moduleID).
-		Order("RANDOM()").
-		Limit(count).
-		Find(&questions).Error
+	query := database.DB.Model(&model.Question{}).Where("module_id = ?", moduleID)
+	offset, err := randomOffset(database.DB, query, count)
+	if err != nil {
+		return nil, err
+	}
+	err = query.Offset(offset).Limit(count).Find(&questions).Error
 	return questions, err
 }
 
@@ -119,13 +136,26 @@ func DeleteQuestion(id uint) error {
 		if err := tx.Where("question_id = ?", id).Delete(&model.UserAnswer{}).Error; err != nil {
 			return err
 		}
-		// 删除 Favorite
-		if err := tx.Where("question_id = ?", id).Delete(&model.Favorite{}).Error; err != nil {
-			return err
-		}
 		// 删除 Question
 		return tx.Delete(&model.Question{}, id).Error
 	})
+}
+
+// BatchGetQuestions 批量获取题目（返回 map[ID]Question）
+func BatchGetQuestions(ids []uint) (map[uint]model.Question, error) {
+	var questions []model.Question
+	if len(ids) == 0 {
+		return make(map[uint]model.Question), nil
+	}
+	err := database.DB.Where("id IN ?", ids).Find(&questions).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[uint]model.Question, len(questions))
+	for i := range questions {
+		result[questions[i].ID] = questions[i]
+	}
+	return result, nil
 }
 
 // CountQuestionsByModule 统计各模块题目数
@@ -144,14 +174,16 @@ func GetQuestionWithModule(id uint) (*model.Question, error) {
 	return &question, err
 }
 
-// GetUnansweredQuestions 获取未做过的题目
+// GetUnansweredQuestions 获取未做过的题目（offset 方式）
 func GetUnansweredQuestions(moduleID uint, count int) ([]model.Question, error) {
 	var questions []model.Question
-	err := database.DB.
-		Where("module_id = ? AND id NOT IN (SELECT question_id FROM user_answers)", moduleID).
-		Order("RANDOM()").
-		Limit(count).
-		Find(&questions).Error
+	query := database.DB.Model(&model.Question{}).
+		Where("module_id = ? AND id NOT IN (SELECT question_id FROM user_answers)", moduleID)
+	offset, err := randomOffset(database.DB, query, count)
+	if err != nil {
+		return nil, err
+	}
+	err = query.Offset(offset).Limit(count).Find(&questions).Error
 	return questions, err
 }
 
@@ -165,19 +197,21 @@ func CountUnansweredByModule(moduleID uint) (int64, error) {
 	return count, err
 }
 
-// GetWrongQuestions 获取错题（取每题最后一次答题记录为错误的）
+// GetWrongQuestions 获取错题（offset 方式，取每题最后一次答题记录为错误的）
 func GetWrongQuestions(moduleID uint, count int) ([]model.Question, error) {
 	var questions []model.Question
-	err := database.DB.
+	query := database.DB.Model(&model.Question{}).
 		Where(`id IN (
 			SELECT question_id FROM user_answers
 			WHERE id IN (SELECT MAX(id) FROM user_answers GROUP BY question_id)
 			AND is_correct = false
 			AND question_id IN (SELECT id FROM questions WHERE module_id = ?)
-		)`, moduleID).
-		Order("RANDOM()").
-		Limit(count).
-		Find(&questions).Error
+		)`, moduleID)
+	offset, err := randomOffset(database.DB, query, count)
+	if err != nil {
+		return nil, err
+	}
+	err = query.Offset(offset).Limit(count).Find(&questions).Error
 	return questions, err
 }
 
@@ -189,18 +223,18 @@ type QuizFilter struct {
 	ExcludeIDs []uint // 排除的题目ID列表
 }
 
-// GetFilteredQuestions 按难度/标签筛选随机题目
+// GetFilteredQuestions 按难度/标签筛选随机题目（offset 方式）
 func GetFilteredQuestions(filter QuizFilter, count int) ([]model.Question, error) {
 	var questions []model.Question
-	query := database.DB.Where("module_id = ?", filter.ModuleID)
+	query := database.DB.Model(&model.Question{}).Where("module_id = ?", filter.ModuleID)
 
 	if filter.Difficulty > 0 {
 		query = query.Where("difficulty = ?", filter.Difficulty)
 	}
 	if filter.Tags != "" {
-		// 支持逗号分隔的多标签匹配（任一匹配即可）
+		// 精确匹配逗号分隔标签
 		for _, tag := range splitTags(filter.Tags) {
-			query = query.Where("tags LIKE ?", "%"+tag+"%")
+			query = query.Where("(',' || tags || ',') LIKE ?", "%,"+tag+",%")
 		}
 	}
 	// 排除已选题目ID，避免重复
@@ -208,32 +242,40 @@ func GetFilteredQuestions(filter QuizFilter, count int) ([]model.Question, error
 		query = query.Where("id NOT IN ?", filter.ExcludeIDs)
 	}
 
-	err := query.Order("RANDOM()").Limit(count).Find(&questions).Error
+	offset, err := randomOffset(database.DB, query, count)
+	if err != nil {
+		return nil, err
+	}
+	err = query.Offset(offset).Limit(count).Find(&questions).Error
 	return questions, err
 }
 
 // GetFilteredUnansweredQuestions 按难度/标签筛选未做过的题目
 func GetFilteredUnansweredQuestions(filter QuizFilter, count int) ([]model.Question, error) {
 	var questions []model.Question
-	query := database.DB.Where("module_id = ? AND id NOT IN (SELECT question_id FROM user_answers)", filter.ModuleID)
+	query := database.DB.Model(&model.Question{}).Where("module_id = ? AND id NOT IN (SELECT question_id FROM user_answers)", filter.ModuleID)
 
 	if filter.Difficulty > 0 {
 		query = query.Where("difficulty = ?", filter.Difficulty)
 	}
 	if filter.Tags != "" {
 		for _, tag := range splitTags(filter.Tags) {
-			query = query.Where("tags LIKE ?", "%"+tag+"%")
+			query = query.Where("(',' || tags || ',') LIKE ?", "%,"+tag+",%")
 		}
 	}
 
-	err := query.Order("RANDOM()").Limit(count).Find(&questions).Error
+	offset, err := randomOffset(database.DB, query, count)
+	if err != nil {
+		return nil, err
+	}
+	err = query.Offset(offset).Limit(count).Find(&questions).Error
 	return questions, err
 }
 
 // GetFilteredWrongQuestions 按难度/标签筛选错题（取每题最后一次答题记录为错误的）
 func GetFilteredWrongQuestions(filter QuizFilter, count int) ([]model.Question, error) {
 	var questions []model.Question
-	query := database.DB.Where(`id IN (
+	query := database.DB.Model(&model.Question{}).Where(`id IN (
 		SELECT question_id FROM user_answers
 		WHERE id IN (SELECT MAX(id) FROM user_answers GROUP BY question_id)
 		AND is_correct = false
@@ -245,18 +287,22 @@ func GetFilteredWrongQuestions(filter QuizFilter, count int) ([]model.Question, 
 	}
 	if filter.Tags != "" {
 		for _, tag := range splitTags(filter.Tags) {
-			query = query.Where("tags LIKE ?", "%"+tag+"%")
+			query = query.Where("(',' || tags || ',') LIKE ?", "%,"+tag+",%")
 		}
 	}
 
-	err := query.Order("RANDOM()").Limit(count).Find(&questions).Error
+	offset, err := randomOffset(database.DB, query, count)
+	if err != nil {
+		return nil, err
+	}
+	err = query.Offset(offset).Limit(count).Find(&questions).Error
 	return questions, err
 }
 
 // CountFilteredUnanswered 按难度/标签统计未做题目数
 func CountFilteredUnanswered(filter QuizFilter) (int64, error) {
 	var count int64
-	query := database.DB.Table("questions").
+	query := database.DB.Model(&model.Question{}).
 		Where("module_id = ? AND id NOT IN (SELECT question_id FROM user_answers)", filter.ModuleID)
 
 	if filter.Difficulty > 0 {
@@ -264,7 +310,7 @@ func CountFilteredUnanswered(filter QuizFilter) (int64, error) {
 	}
 	if filter.Tags != "" {
 		for _, tag := range splitTags(filter.Tags) {
-			query = query.Where("tags LIKE ?", "%"+tag+"%")
+			query = query.Where("(',' || tags || ',') LIKE ?", "%,"+tag+",%")
 		}
 	}
 

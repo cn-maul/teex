@@ -58,3 +58,30 @@ func GetSessionAnswers(sessionID uint) ([]model.UserAnswer, error) {
 		Find(&answers).Error
 	return answers, err
 }
+
+// GetSessionAnswersPaginated 分页获取某个场次的答题记录
+func GetSessionAnswersPaginated(sessionID uint, page, size int) ([]model.UserAnswer, int64, error) {
+	var answers []model.UserAnswer
+	var total int64
+
+	if page < 1 {
+		page = 1
+	}
+	if size < 1 || size > 100 {
+		size = 20
+	}
+	offset := (page - 1) * size
+
+	err := database.DB.Model(&model.UserAnswer{}).Where("exam_session_id = ?", sessionID).Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	err = database.DB.Preload("Question").
+		Where("exam_session_id = ?", sessionID).
+		Order("created_at ASC").
+		Offset(offset).Limit(size).
+		Find(&answers).Error
+
+	return answers, total, err
+}

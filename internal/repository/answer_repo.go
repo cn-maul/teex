@@ -152,3 +152,53 @@ func ClearAllRecords() error {
 		return tx.Where("1 = 1").Delete(&model.ExamSession{}).Error
 	})
 }
+
+// BatchCreateAnswers 批量创建答题记录
+func BatchCreateAnswers(answers []model.UserAnswer) error {
+	if len(answers) == 0 {
+		return nil
+	}
+	return database.DB.CreateInBatches(answers, 100).Error
+}
+
+// CountAffectedByModule 统计删除某模块级联影响的记录数
+func CountAffectedByModule(moduleID uint) (questions int64, answers int64, err error) {
+	qErr := database.DB.Model(&model.Question{}).Where("module_id = ?", moduleID).Count(&questions).Error
+	if qErr != nil {
+		return 0, 0, qErr
+	}
+	aErr := database.DB.Model(&model.UserAnswer{}).
+		Where("question_id IN (SELECT id FROM questions WHERE module_id = ?)", moduleID).Count(&answers).Error
+	if aErr != nil {
+		return 0, 0, aErr
+	}
+	return questions, answers, nil
+}
+
+// CountAffectedByExamType 统计删除某考试类型级联影响的记录数
+func CountAffectedByExamType(examTypeID uint) (modules int64, questions int64, answers int64, err error) {
+	mErr := database.DB.Model(&model.Module{}).Where("exam_type_id = ?", examTypeID).Count(&modules).Error
+	if mErr != nil {
+		return 0, 0, 0, mErr
+	}
+
+	var moduleIDs []uint
+	if err := database.DB.Model(&model.Module{}).Where("exam_type_id = ?", examTypeID).Pluck("id", &moduleIDs).Error; err != nil {
+		return 0, 0, 0, err
+	}
+
+	if len(moduleIDs) == 0 {
+		return modules, 0, 0, nil
+	}
+
+	qErr := database.DB.Model(&model.Question{}).Where("module_id IN ?", moduleIDs).Count(&questions).Error
+	if qErr != nil {
+		return 0, 0, 0, qErr
+	}
+	aErr := database.DB.Model(&model.UserAnswer{}).
+		Where("question_id IN (SELECT id FROM questions WHERE module_id IN ?)", moduleIDs).Count(&answers).Error
+	if aErr != nil {
+		return 0, 0, 0, aErr
+	}
+	return modules, questions, answers, nil
+}

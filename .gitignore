@@ -1,5 +1,5 @@
 # Compiled binaries
-server
+/server
 cmd/server/server
 
 # SQLite database files
@@ -15,8 +15,22 @@ cmd/server/server
 .codegraph/
 .reasonix/
 
+# Environment / secrets
+.env
+.env.*
+
 # Generated report
 SOFTWARE_REPORT.md
+
+# OS / editor detritus
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Temp directories
+tmp/
+temp/
 
 # Frontend build artifacts (web/ has its own .gitignore too)
 web/node_modules/

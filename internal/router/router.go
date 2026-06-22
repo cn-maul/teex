@@ -65,6 +65,7 @@ func Setup() *gin.Engine {
 		api.DELETE("/records", handler.ClearAllRecords)
 		api.GET("/export", handler.ExportData)
 		api.POST("/import", handler.ImportFullData)
+
 	}
 
 	return r

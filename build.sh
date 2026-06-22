@@ -63,12 +63,63 @@ check_go() {
 }
 
 find_node() {
-    command -v node &>/dev/null && return 0
-    for rc in "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile" "$HOME/.zshrc"; do
-        [[ -f "$rc" ]] && source "$rc" 2>/dev/null || true
-    done
+    # 第 1 关：当前 PATH 中已经有 v22
+    if command -v node &>/dev/null; then
+        local ver
+        ver="$(node -v 2>/dev/null)"
+        if [[ "$ver" =~ ^v22\. ]]; then
+            return 0
+        fi
+    fi
+
+    # 第 2 关：加载 NVM（绕开 .bashrc 的交互式守卫）
     export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-    [[ -s "$NVM_DIR/nvm.sh" ]] && source "$NVM_DIR/nvm.sh" 2>/dev/null || true
+    if [[ -s "$NVM_DIR/nvm.sh" ]]; then
+        # shellcheck source=/dev/null
+        source "$NVM_DIR/nvm.sh"
+        if command -v nvm &>/dev/null && nvm use 22 2>/dev/null; then
+            return 0
+        fi
+    fi
+
+    # 第 3 关：模拟交互 shell，完整加载 .bashrc 中的版本管理器
+    local interactive_node
+    interactive_node="$(bash -i -c 'command -v node' 2>/dev/null)" || true
+    if [[ -n "$interactive_node" && -x "$interactive_node" ]]; then
+        local ver
+        ver="$("$interactive_node" -v 2>/dev/null)"
+        if [[ "$ver" =~ ^v22\. ]]; then
+            export PATH="$(dirname "$interactive_node"):$PATH"
+            return 0
+        fi
+    fi
+
+    # 第 4 关：兜底搜索常见安装路径
+    local search_paths=(
+        "$HOME/.nvm/versions/node/v22."*"/bin/node"
+        "/usr/local/nodejs/"*"/bin/node"
+        "/opt/nodejs/"*"/bin/node"
+    )
+    local found
+    for pattern in "${search_paths[@]}"; do
+        # shellcheck disable=SC2086
+        for bin in $pattern; do
+            [[ -x "$bin" ]] || continue
+            local ver
+            ver="$("$bin" -v 2>/dev/null)"
+            if [[ "$ver" =~ ^v22\. ]]; then
+                export PATH="$(dirname "$bin"):$PATH"
+                return 0
+            fi
+            [[ -z "$found" ]] && found="$bin"
+        done
+    done
+    if [[ -n "$found" && -x "$found" ]]; then
+        export PATH="$(dirname "$found"):$PATH"
+        return 0
+    fi
+
+    # 最后回退：PATH 中任意 node
     command -v node &>/dev/null && return 0
     return 1
 }
@@ -82,13 +133,37 @@ check_node() {
         err "未找到 npm，请先安装 npm"
         exit 1
     fi
-    ok "Node: $(node -v)  npm: $(npm -v)"
+    local node_ver
+    node_ver="$(node -v)"
+    if [[ "$node_ver" =~ ^v22\. ]]; then
+        ok "Node: $node_ver  npm: $(npm -v)  ✓ v22"
+    else
+        info "Node: $node_ver（v22 未安装，使用当前版本）"
+    fi
 }
 
 ensure_npm_deps() {
-    if [[ ! -d "web/node_modules" ]]; then
-        info "首次运行，安装前端依赖..."
-        (cd web && npm install)
+    local marker="web/node_modules/.node-version"
+    local current_ver
+    current_ver="$(node -v)"
+
+    if [[ ! -f "web/node_modules/.bin/vite" ]]; then
+        info "安装前端依赖..."
+        (cd web && rm -rf node_modules package-lock.json && npm install)
+        echo "$current_ver" > "$marker"
+        ok "前端依赖安装完成"
+    elif [[ ! -f "$marker" ]]; then
+        # 有 node_modules 但没有版本标记，说明是老安装
+        info "检测到旧版前端依赖，重新安装..."
+        (cd web && rm -rf node_modules package-lock.json && npm install)
+        echo "$current_ver" > "$marker"
+        ok "前端依赖安装完成"
+    elif [[ "$(cat "$marker" 2>/dev/null)" != "$current_ver" ]]; then
+        local old_ver
+        old_ver="$(cat "$marker" 2>/dev/null)"
+        info "Node 版本变化（${old_ver:-?} → $current_ver），重新安装前端依赖..."
+        (cd web && rm -rf node_modules package-lock.json && npm install)
+        echo "$current_ver" > "$marker"
         ok "前端依赖安装完成"
     fi
 }

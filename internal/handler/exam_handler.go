@@ -10,6 +10,7 @@ import (
 	"exam-quiz/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // GetExamTypes 获取所有考试类型
@@ -77,6 +78,17 @@ func UpdateExamType(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的考试类型 ID"})
 		return
 	}
+
+	// 检查是否存在
+	if _, err := repository.GetExamType(uint(id)); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "考试类型不存在"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
+		return
+	}
+
 	var exam model.ExamType
 	if err := c.ShouldBindJSON(&exam); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效"})
@@ -99,12 +111,34 @@ func DeleteExamType(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的考试类型 ID"})
 		return
 	}
+
+	// 先检查是否存在
+	if _, err := repository.GetExamType(uint(id)); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "考试类型不存在"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
+		return
+	}
+
+	// 计算级联删除的影响数量
+	modules, questions, answers, countErr := repository.CountAffectedByExamType(uint(id))
+	if countErr != nil {
+		log.Printf("CountAffectedByExamType error: %v", countErr)
+	}
+
 	if err := service.DeleteExamType(uint(id)); err != nil {
 		log.Printf("DeleteExamType error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+	c.JSON(http.StatusOK, gin.H{
+		"message":             "删除成功",
+		"affected_modules":    modules,
+		"affected_questions":  questions,
+		"affected_answers":    answers,
+	})
 }
 
 // CreateModule 创建模块
@@ -123,7 +157,11 @@ func CreateModule(c *gin.Context) {
 
 	// 验证考试类型是否存在
 	if _, err := repository.GetExamType(module.ExamTypeID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "考试类型不存在"})
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "考试类型不存在"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
 		return
 	}
 
@@ -149,6 +187,17 @@ func UpdateModule(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的模块 ID"})
 		return
 	}
+
+	// 检查是否存在
+	if _, err := repository.GetModule(uint(id)); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "模块不存在"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
+		return
+	}
+
 	var module model.Module
 	if err := c.ShouldBindJSON(&module); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效"})
@@ -171,12 +220,33 @@ func DeleteModule(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的模块 ID"})
 		return
 	}
+
+	// 先检查是否存在
+	if _, err := repository.GetModule(uint(id)); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "模块不存在"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
+		return
+	}
+
+	// 计算级联删除的影响数量
+	questions, answers, countErr := repository.CountAffectedByModule(uint(id))
+	if countErr != nil {
+		log.Printf("CountAffectedByModule error: %v", countErr)
+	}
+
 	if err := service.DeleteModule(uint(id)); err != nil {
 		log.Printf("DeleteModule error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+	c.JSON(http.StatusOK, gin.H{
+		"message":            "删除成功",
+		"affected_questions": questions,
+		"affected_answers":   answers,
+	})
 }
 
 // HealthCheck 健康检查

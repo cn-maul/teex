@@ -89,10 +89,6 @@ func DeleteExamType(id uint) error {
 			if err := tx.Where("module_id IN ?", moduleIDs).Delete(&model.ExamSession{}).Error; err != nil {
 				return err
 			}
-			// 删除 Favorite
-			if err := tx.Where("question_id IN (SELECT id FROM questions WHERE module_id IN ?)", moduleIDs).Delete(&model.Favorite{}).Error; err != nil {
-				return err
-			}
 			// 删除 UserAnswer
 			if err := tx.Where("question_id IN (SELECT id FROM questions WHERE module_id IN ?)", moduleIDs).Delete(&model.UserAnswer{}).Error; err != nil {
 				return err
@@ -127,10 +123,6 @@ func DeleteModule(id uint) error {
 		if err := tx.Where("module_id = ?", id).Delete(&model.ExamSession{}).Error; err != nil {
 			return err
 		}
-		// 删除 Favorite
-		if err := tx.Where("question_id IN (SELECT id FROM questions WHERE module_id = ?)", id).Delete(&model.Favorite{}).Error; err != nil {
-			return err
-		}
 		// 删除 UserAnswer
 		if err := tx.Where("question_id IN (SELECT id FROM questions WHERE module_id = ?)", id).Delete(&model.UserAnswer{}).Error; err != nil {
 			return err
@@ -142,4 +134,19 @@ func DeleteModule(id uint) error {
 		// 删除 Module
 		return tx.Delete(&model.Module{}, id).Error
 	})
+}
+
+// GetModulesByExamIDWithStats 获取某考试类型下的模块列表（含题目数和未做题数，单次查询）
+func GetModulesByExamIDWithStats(examTypeID uint) ([]model.ModuleWithStats, error) {
+	var results []model.ModuleWithStats
+	err := database.DB.Raw(`
+		SELECT m.*,
+			COALESCE((SELECT COUNT(*) FROM questions q WHERE q.module_id = m.id), 0) AS question_count,
+			COALESCE((SELECT COUNT(*) FROM questions q WHERE q.module_id = m.id
+				AND q.id NOT IN (SELECT question_id FROM user_answers)), 0) AS unanswered
+		FROM modules m
+		WHERE m.exam_type_id = ?
+		ORDER BY m.sort ASC
+	`, examTypeID).Scan(&results).Error
+	return results, err
 }

@@ -15,6 +15,7 @@ const state = reactive({
 // 设置状态
 const defaultSettings = {
   quizCount: 10,
+  quizMode: 'analysis', // 'analysis' = 解析模式, 'exam' = 考试模式
 }
 
 const settingsState = reactive({
@@ -34,6 +35,7 @@ function loadSettings() {
 function saveSettings() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify({
     quizCount: settingsState.quizCount,
+    quizMode: settingsState.quizMode,
   }))
 }
 
@@ -113,6 +115,11 @@ export function useExamStore() {
     saveSettings()
   }
 
+  function updateQuizMode(mode) {
+    settingsState.quizMode = mode
+    saveSettings()
+  }
+
   return {
     state,
     settings: settingsState,
@@ -121,5 +128,6 @@ export function useExamStore() {
     setExam,
     currentExam,
     updateQuizCount,
+    updateQuizMode,
   }
 }

@@ -1,18 +1,20 @@
 <template>
   <div class="quiz-view">
-    <!-- 进度条 -->
-    <div class="progress-bar" v-if="questions.length > 0">
-      <div class="progress-info">
-        <span class="progress-text">{{ currentIndex + 1 }} / {{ questions.length }}</span>
-        <div class="progress-center"></div>
-        <span class="progress-score">
-          <span class="score-correct">✓ {{ correctCount }}</span>
-          <span class="score-wrong">✗ {{ wrongCount }}</span>
-        </span>
+    <!-- 顶部条：模式 + 进度 -->
+    <div class="top-bar" v-if="questions.length > 0 && !finished">
+      <div class="mode-badge" :class="quizMode === 'exam' ? 'mode-exam' : 'mode-analysis'">
+        {{ quizMode === 'exam' ? '考试模式' : '解析模式' }}
       </div>
-      <div class="progress-track">
-        <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
+      <div class="top-progress">
+        <span class="progress-text">{{ quizMode === 'exam' ? answeredCount + ' / ' + questions.length : currentIndex + 1 + ' / ' + questions.length }}</span>
       </div>
+      <div class="top-stats" v-if="quizMode === 'analysis'">
+        <span class="score-correct">✓ {{ correctCount }}</span>
+        <span class="score-wrong">✗ {{ wrongCount }}</span>
+      </div>
+    </div>
+    <div class="progress-track" v-if="questions.length > 0 && !finished">
+      <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
     </div>
 
     <!-- 加载状态 -->
@@ -32,8 +34,56 @@
       <button class="btn btn-primary" @click="$router.back()">返回</button>
     </div>
 
-    <!-- 刷题完成 -->
-    <div v-else-if="finished" class="finished">
+    <!-- ========== 考试模式：答题页面 ========== -->
+    <div v-else-if="quizMode === 'exam' && !finished && !showExamResults" class="exam-container">
+      <div class="exam-progress-hint">
+        <span>已答 {{ answeredCount }} 题，共 {{ questions.length }} 题</span>
+      </div>
+
+      <div class="exam-questions">
+        <div
+          v-for="(q, idx) in questions"
+          :key="q.id"
+          class="exam-question-card"
+          :class="{ 'exam-answered': examSelectedAnswers[idx] }"
+        >
+          <div class="eq-header">
+            <span class="eq-number">{{ idx + 1 }}</span>
+            <span class="question-type-badge">{{ getTypeLabel(q.type) }}</span>
+            <div class="difficulty">
+              <span v-for="i in 5" :key="i" class="star" :class="{ filled: i <= q.difficulty }">★</span>
+            </div>
+          </div>
+
+          <div class="eq-content">{{ q.content }}</div>
+
+          <div class="options">
+            <div
+              v-for="(option, oi) in parseOptions(q.options)"
+              :key="oi"
+              class="option"
+              :class="{ selected: examSelectedAnswers[idx] === getOptionLetter(option) }"
+              @click="selectExamOption(idx, option)"
+            >
+              <span class="option-letter">{{ getOptionLetter(option) }}</span>
+              <span class="option-text">{{ getOptionText(option) }}</span>
+              <svg v-if="examSelectedAnswers[idx] === getOptionLetter(option)" class="option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="exam-actions">
+        <button class="btn btn-primary btn-lg" :disabled="answeredCount === 0" @click="submitExam">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          交卷
+        </button>
+        <span class="exam-actions-hint" v-if="answeredCount < questions.length">还有 {{ questions.length - answeredCount }} 题未作答</span>
+      </div>
+    </div>
+
+    <!-- ========== 考试模式：交卷后的结果 ========== -->
+    <div v-else-if="quizMode === 'exam' && showExamResults" class="finished">
       <div class="finished-card">
         <div class="finished-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="48" height="48" color="var(--success)">
@@ -41,18 +91,18 @@
             <polyline points="22 4 12 14.01 9 11.01"></polyline>
           </svg>
         </div>
-        <h2>刷题完成</h2>
+        <h2>考试完成</h2>
         <div class="result-ring">
           <svg viewBox="0 0 120 120">
             <circle class="ring-bg" cx="60" cy="60" r="50"></circle>
-            <circle 
-              class="ring-fill" 
+            <circle
+              class="ring-fill"
               cx="60" cy="60" r="50"
-              :style="{ strokeDasharray: 314, strokeDashoffset: 314 - (314 * accuracy / 100) }"
+              :style="{ strokeDasharray: 314, strokeDashoffset: 314 - (314 * examAccuracy / 100) }"
             ></circle>
           </svg>
           <div class="ring-value">
-            <span class="ring-number">{{ accuracy }}</span>
+            <span class="ring-number">{{ examAccuracy }}</span>
             <span class="ring-unit">%</span>
           </div>
         </div>
@@ -63,13 +113,58 @@
           </div>
           <div class="result-divider"></div>
           <div class="result-item">
-            <span class="result-value success">{{ correctCount }}</span>
+            <span class="result-value success">{{ examCorrect }}</span>
             <span class="result-label">正确</span>
           </div>
           <div class="result-divider"></div>
           <div class="result-item">
-            <span class="result-value error">{{ wrongCount }}</span>
+            <span class="result-value error">{{ examWrong }}</span>
             <span class="result-label">错误</span>
+          </div>
+          <div class="result-divider"></div>
+          <div class="result-item">
+            <span class="result-value" style="color: var(--text-muted);">{{ examUnanswered }}</span>
+            <span class="result-label">未答</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 全部题目的解析 -->
+      <div class="exam-analysis-list">
+        <h3 class="analysis-title">题目解析</h3>
+        <div
+          v-for="(q, idx) in questions"
+          :key="q.id"
+          class="analysis-item"
+          :class="{ 'analysis-correct': examResults[idx]?.is_correct, 'analysis-wrong': examResults[idx] && !examResults[idx].is_correct, 'analysis-unanswered': !examResults[idx] }"
+        >
+          <div class="analysis-header">
+            <span class="analysis-number">{{ idx + 1 }}</span>
+            <span class="analysis-type">{{ getTypeLabel(q.type) }}</span>
+            <span class="analysis-status" v-if="!examResults[idx]">未作答</span>
+            <span class="analysis-status status-correct" v-else-if="examResults[idx].is_correct">✓ 正确</span>
+            <span class="analysis-status status-wrong" v-else>✗ 错误</span>
+          </div>
+          <div class="analysis-content">{{ q.content }}</div>
+          <div class="analysis-detail">
+            <span class="analysis-user-answer" v-if="examResults[idx]">你的答案：<strong>{{ examResults[idx].user_input || '（未作答）' }}</strong></span>
+            <span class="analysis-correct-answer">正确答案：<strong>{{ q.answer }}</strong></span>
+          </div>
+          <div class="analysis-explanation" v-if="q.analysis">{{ q.analysis }}</div>
+          <div class="analysis-options">
+            <div
+              v-for="(option, oi) in parseOptions(q.options)"
+              :key="oi"
+              class="analysis-option"
+              :class="{
+                'aopt-selected': examSelectedAnswers[idx] === getOptionLetter(option),
+                'aopt-correct': getOptionLetter(option) === q.answer,
+                'aopt-wrong': examSelectedAnswers[idx] === getOptionLetter(option) && getOptionLetter(option) !== q.answer
+              }"
+            >
+              <span class="aopt-letter">{{ getOptionLetter(option) }}</span>
+              <span class="aopt-text">{{ getOptionText(option) }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -80,87 +175,204 @@
       </div>
     </div>
 
-    <!-- 题目卡片 -->
-    <div v-else class="question-card">
-      <div class="question-header">
-        <span class="question-type-badge">{{ getTypeLabel(currentQuestion.type) }}</span>
-        <div class="difficulty">
-          <span v-for="i in 5" :key="i" class="star" :class="{ filled: i <= currentQuestion.difficulty }">★</span>
-        </div>
-      </div>
-
-      <div class="question-content">
-        <p>{{ currentQuestion.content }}</p>
-      </div>
-
-      <div class="options">
-        <div 
-          v-for="(option, index) in parsedOptions" 
-          :key="index"
-          class="option"
-          :class="getOptionClass(option)"
-          @click="selectOption(option)"
-        >
-          <span class="option-letter">{{ getOptionLetter(option) }}</span>
-          <span class="option-text">{{ getOptionText(option) }}</span>
-          <svg v-if="isSelected(option) && !finished" class="option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        </div>
-      </div>
-
-      <!-- 即时反馈 -->
-      <Transition name="slide">
-        <div v-if="showFeedback" class="feedback-card" :class="isCorrect ? 'feedback-success' : 'feedback-error'">
-          <div class="feedback-icon">{{ isCorrect ? '✓' : '✗' }}</div>
-          <div class="feedback-body">
-            <div class="feedback-title">{{ isCorrect ? '回答正确' : '回答错误' }}</div>
-            <div class="feedback-answer">正确答案：{{ currentQuestion.answer }}</div>
-            <div class="feedback-analysis" v-if="currentQuestion.analysis">{{ currentQuestion.analysis }}</div>
+    <!-- ========== 解析模式：逐题作答 ========== -->
+    <template v-else-if="quizMode === 'analysis'">
+      <!-- 解析模式完成页 -->
+      <div v-if="finished" class="finished">
+        <div class="finished-card">
+          <div class="finished-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="48" height="48" color="var(--success)">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+          </div>
+          <h2>刷题完成</h2>
+          <div class="result-ring">
+            <svg viewBox="0 0 120 120">
+              <circle class="ring-bg" cx="60" cy="60" r="50"></circle>
+              <circle
+                class="ring-fill"
+                cx="60" cy="60" r="50"
+                :style="{ strokeDasharray: 314, strokeDashoffset: 314 - (314 * accuracy / 100) }"
+              ></circle>
+            </svg>
+            <div class="ring-value">
+              <span class="ring-number">{{ accuracy }}</span>
+              <span class="ring-unit">%</span>
+            </div>
+          </div>
+          <div class="result-stats">
+            <div class="result-item">
+              <span class="result-value total">{{ questions.length }}</span>
+              <span class="result-label">总题数</span>
+            </div>
+            <div class="result-divider"></div>
+            <div class="result-item">
+              <span class="result-value success">{{ correctCount }}</span>
+              <span class="result-label">正确</span>
+            </div>
+            <div class="result-divider"></div>
+            <div class="result-item">
+              <span class="result-value error">{{ wrongCount }}</span>
+              <span class="result-label">错误</span>
+            </div>
           </div>
         </div>
-      </Transition>
 
-      <!-- 底部操作 -->
-      <div class="question-actions">
-        <button 
-          v-if="!showFeedback" 
-          class="btn btn-primary btn-lg" 
-          :disabled="!selectedOption"
-          @click="submitSingleAnswer"
-        >
-          提交答案
-        </button>
-        <button v-else class="btn btn-primary btn-lg" @click="nextQuestion">
-          {{ currentIndex < questions.length - 1 ? '下一题' : '查看结果' }}
-        </button>
+        <!-- 全部题目的解析 -->
+        <div class="exam-analysis-list">
+          <h3 class="analysis-title">题目解析</h3>
+          <div
+            v-for="(q, idx) in questions"
+            :key="q.id"
+            class="analysis-item"
+            :class="{ 'analysis-correct': analysisResults[idx]?.is_correct, 'analysis-wrong': analysisResults[idx] && !analysisResults[idx].is_correct }"
+          >
+            <div class="analysis-header">
+              <span class="analysis-number">{{ idx + 1 }}</span>
+              <span class="analysis-type">{{ getTypeLabel(q.type) }}</span>
+              <span class="analysis-status status-correct" v-if="analysisResults[idx]?.is_correct">✓ 正确</span>
+              <span class="analysis-status status-wrong" v-else-if="analysisResults[idx]">✗ 错误</span>
+            </div>
+            <div class="analysis-content">{{ q.content }}</div>
+            <div class="analysis-detail">
+              <span class="analysis-user-answer" v-if="analysisResults[idx]">你的答案：<strong>{{ analysisResults[idx].user_input }}</strong></span>
+              <span class="analysis-correct-answer">正确答案：<strong>{{ q.answer }}</strong></span>
+            </div>
+            <div class="analysis-explanation" v-if="q.analysis">{{ q.analysis }}</div>
+            <div class="analysis-options">
+              <div
+                v-for="(option, oi) in parseOptions(q.options)"
+                :key="oi"
+                class="analysis-option"
+                :class="{
+                  'aopt-selected': getAnalysisSelected(idx) === getOptionLetter(option),
+                  'aopt-correct': getOptionLetter(option) === q.answer,
+                  'aopt-wrong': getAnalysisSelected(idx) === getOptionLetter(option) && getOptionLetter(option) !== q.answer
+                }"
+              >
+                <span class="aopt-letter">{{ getOptionLetter(option) }}</span>
+                <span class="aopt-text">{{ getOptionText(option) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="finished-actions">
+          <button class="btn btn-primary" @click="restartQuiz">再来一轮</button>
+          <button class="btn btn-ghost" @click="$router.back()">返回</button>
+        </div>
       </div>
-    </div>
+
+      <!-- 解析模式：题目卡片 -->
+      <div v-else class="question-card">
+        <div class="question-header">
+          <span class="question-type-badge">{{ getTypeLabel(currentQuestion.type) }}</span>
+          <div class="difficulty">
+            <span v-for="i in 5" :key="i" class="star" :class="{ filled: i <= currentQuestion.difficulty }">★</span>
+          </div>
+        </div>
+
+        <div class="question-content">
+          <p>{{ currentQuestion.content }}</p>
+        </div>
+
+        <div class="options">
+          <div
+            v-for="(option, index) in parsedOptions"
+            :key="index"
+            class="option"
+            :class="getOptionClass(option)"
+            @click="selectOption(option)"
+          >
+            <span class="option-letter">{{ getOptionLetter(option) }}</span>
+            <span class="option-text">{{ getOptionText(option) }}</span>
+            <svg v-if="isSelected(option) && !finished" class="option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+        </div>
+
+        <!-- 即时反馈 -->
+        <Transition name="slide">
+          <div v-if="showFeedback" class="feedback-card" :class="isCorrect ? 'feedback-success' : 'feedback-error'">
+            <div class="feedback-icon">{{ isCorrect ? '✓' : '✗' }}</div>
+            <div class="feedback-body">
+              <div class="feedback-title">{{ isCorrect ? '回答正确' : '回答错误' }}</div>
+              <div class="feedback-answer">正确答案：{{ currentQuestion.answer }}</div>
+              <div class="feedback-analysis" v-if="currentQuestion.analysis">{{ currentQuestion.analysis }}</div>
+            </div>
+          </div>
+        </Transition>
+
+        <!-- 底部操作 -->
+        <div class="question-actions">
+          <button
+            v-if="!showFeedback"
+            class="btn btn-primary btn-lg"
+            :disabled="!selectedOption"
+            @click="submitSingleAnswer"
+          >
+            提交答案
+          </button>
+          <button v-else class="btn btn-primary btn-lg" @click="nextQuestion">
+            {{ currentIndex < questions.length - 1 ? '下一题' : '查看结果' }}
+          </button>
+          <button
+            v-if="!showFeedback && currentIndex > 0"
+            class="btn btn-ghost btn-lg"
+            @click="submitEarly"
+          >
+            交卷
+          </button>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { startQuiz, submitAnswer as apiSubmitAnswer } from '../api'
+import { startQuiz, submitAnswer as apiSubmitAnswer, submitBatchAnswers } from '../api'
 import { useExamStore } from '../stores/exam'
 
 const route = useRoute()
 const router = useRouter()
 const examStore = useExamStore()
 
+// ====== 通用状态 ======
 const questions = ref([])
+const loading = ref(true)
+const finished = ref(false)
+const quizMode = ref(examStore.settings.quizMode || 'analysis')
+
+// ====== 解析模式状态 ======
 const currentIndex = ref(0)
 const selectedOption = ref('')
 const showFeedback = ref(false)
 const isCorrect = ref(false)
-const loading = ref(true)
-const finished = ref(false)
 const correctCount = ref(0)
 const wrongCount = ref(0)
 const sessionId = ref(null)
+const questionStartTime = ref(0)
+// 解析模式累积的答题结果（用于终页解析）
+const analysisResults = ref([])
 
+// ====== 考试模式状态 ======
+const examSelectedAnswers = ref({}) // { [questionIndex]: 'A' | 'B' | ... }
+const examResults = ref([])          // AnswerResult[]
+const showExamResults = ref(false)
+const examSessionId = ref(null)
+const examStartTime = ref(0)
+
+// ====== 计算属性 ======
+
+// 解析模式
 const currentQuestion = computed(() => questions.value[currentIndex.value] || {})
 const progressPercent = computed(() => {
   if (questions.value.length === 0) return 0
+  if (quizMode.value === 'exam') {
+    return (answeredCount.value / questions.value.length) * 100
+  }
   return ((currentIndex.value + 1) / questions.value.length) * 100
 })
 const accuracy = computed(() => {
@@ -177,6 +389,32 @@ const parsedOptions = computed(() => {
   }
 })
 
+// 考试模式
+const answeredCount = computed(() => {
+  return Object.keys(examSelectedAnswers.value).length
+})
+
+const examAccuracy = computed(() => {
+  const answered = examResults.value.filter(r => r !== undefined)
+  if (answered.length === 0) return 0
+  const correct = answered.filter(r => r.is_correct).length
+  return Math.round((correct / answered.length) * 100)
+})
+
+const examCorrect = computed(() => {
+  return examResults.value.filter(r => r && r.is_correct).length
+})
+
+const examWrong = computed(() => {
+  return examResults.value.filter(r => r && !r.is_correct).length
+})
+
+const examUnanswered = computed(() => {
+  return questions.value.length - examResults.value.length
+})
+
+// ====== 生命周期 ======
+
 onMounted(async () => {
   document.addEventListener('keydown', handleKeydown)
   await loadQuestions()
@@ -186,15 +424,37 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
 })
 
+// ====== 键盘快捷键 ======
+
 function handleKeydown(e) {
-  // Don't fire shortcuts when typing in input fields
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return
-  // Don't fire when quiz hasn't loaded or is finished
   if (loading.value || questions.value.length === 0) return
 
   const key = e.key.toLowerCase()
 
-  // A/B/C/D - Select the corresponding option
+  // 考试模式下，快捷键映射到当前可见题目的选项
+  if (quizMode.value === 'exam' && !showExamResults.value) {
+    if (['a', 'b', 'c', 'd', 'e'].includes(key) && !finished.value) {
+      const letterMap = { a: 'A', b: 'B', c: 'C', d: 'D', e: 'E' }
+      const letter = letterMap[key]
+      // 找到第一个未选中的题目，选择对应选项
+      for (let i = 0; i < questions.value.length; i++) {
+        if (!examSelectedAnswers.value[i]) {
+          const q = questions.value[i]
+          const options = parseOptions(q.options)
+          const option = options.find(opt => getOptionLetter(opt) === letter)
+          if (option) {
+            selectExamOption(i, option)
+          }
+          break
+        }
+      }
+      return
+    }
+    return
+  }
+
+  // 解析模式快捷键
   if (['a', 'b', 'c', 'd'].includes(key) && !finished.value) {
     const letterMap = { a: 'A', b: 'B', c: 'C', d: 'D' }
     const letter = letterMap[key]
@@ -220,30 +480,13 @@ function handleKeydown(e) {
   }
 }
 
-async function loadQuestions() {
-  loading.value = true
+// ====== 工具函数 ======
+
+function parseOptions(optionsStr) {
   try {
-    const mode = route.query.mode || 'default'
-    const count = examStore.settings.quizCount || 10
-    const difficulty = parseInt(route.query.difficulty) || 0
-    const res = await startQuiz({
-      module_id: parseInt(route.params.moduleId),
-      count,
-      mode,
-      difficulty
-    })
-    questions.value = res.data.data
-    sessionId.value = res.data.session_id || null
-    currentIndex.value = 0
-    correctCount.value = 0
-    wrongCount.value = 0
-    finished.value = false
-    showFeedback.value = false
-    selectedOption.value = ''
-  } catch (err) {
-    console.error('Failed to start quiz:', err)
-  } finally {
-    loading.value = false
+    return JSON.parse(optionsStr || '[]')
+  } catch {
+    return []
   }
 }
 
@@ -261,6 +504,53 @@ function getOptionText(option) {
   if (!option || option.length < 2) return option || ''
   return option.substring(1).replace(/^[\s.、\s]+/, '').trim()
 }
+
+function startTimer() {
+  questionStartTime.value = Date.now()
+}
+
+function getDuration() {
+  if (!questionStartTime.value) return 0
+  return Math.floor((Date.now() - questionStartTime.value) / 1000)
+}
+
+// ====== 题目加载 ======
+
+async function loadQuestions() {
+  loading.value = true
+  try {
+    const mode = route.query.mode || 'default'
+    const count = examStore.settings.quizCount || 10
+    const difficulty = parseInt(route.query.difficulty) || 0
+    const res = await startQuiz({
+      module_id: parseInt(route.params.moduleId),
+      count,
+      mode,
+      difficulty
+    })
+    questions.value = res.data.data
+    sessionId.value = res.data.session_id || null
+    examSessionId.value = res.data.session_id || null
+    currentIndex.value = 0
+    correctCount.value = 0
+    wrongCount.value = 0
+    finished.value = false
+    showFeedback.value = false
+    selectedOption.value = ''
+    examSelectedAnswers.value = {}
+    examResults.value = []
+    showExamResults.value = false
+    analysisResults.value = []
+    startTimer()
+    examStartTime.value = Date.now()
+  } catch (err) {
+    console.error('Failed to start quiz:', err)
+  } finally {
+    loading.value = false
+  }
+}
+
+// ====== 解析模式逻辑 ======
 
 function isSelected(option) {
   const letter = getOptionLetter(option)
@@ -292,12 +582,14 @@ async function submitSingleAnswer() {
     const res = await apiSubmitAnswer({
       question_id: currentQuestion.value.id,
       user_input: selectedOption.value,
-      duration: 0
+      duration: getDuration()
     })
     isCorrect.value = res.data.data.is_correct
     showFeedback.value = true
     if (isCorrect.value) correctCount.value++
     else wrongCount.value++
+    // 记录结果
+    analysisResults.value[currentIndex.value] = res.data.data
   } catch (err) {
     console.error('Failed to submit answer:', err)
   }
@@ -309,11 +601,78 @@ function nextQuestion() {
     selectedOption.value = ''
     showFeedback.value = false
     isCorrect.value = false
+    startTimer()
   } else {
     finished.value = true
   }
 }
 
+// 解析模式：提前交卷
+async function submitEarly() {
+  finished.value = true
+}
+
+// 解析模式结果页获取某题的选项
+function getAnalysisSelected(idx) {
+  const result = analysisResults.value[idx]
+  if (!result) return ''
+  return result.user_input || ''
+}
+
+// ====== 考试模式逻辑 ======
+
+function selectExamOption(idx, option) {
+  if (showExamResults.value) return
+  const letter = getOptionLetter(option)
+  if (examSelectedAnswers.value[idx] === letter) {
+    // 点击已选的则取消
+    const newAnswers = { ...examSelectedAnswers.value }
+    delete newAnswers[idx]
+    examSelectedAnswers.value = newAnswers
+  } else {
+    examSelectedAnswers.value = { ...examSelectedAnswers.value, [idx]: letter }
+  }
+}
+
+async function submitExam() {
+  if (answeredCount.value === 0) return
+
+  // 构建批量提交数据
+  const answers = []
+  for (const [idx, userInput] of Object.entries(examSelectedAnswers.value)) {
+    const q = questions.value[parseInt(idx)]
+    if (!q) continue
+    answers.push({
+      question_id: q.id,
+      user_input: userInput,
+      duration: Math.floor((Date.now() - examStartTime.value) / 1000)
+    })
+  }
+
+  try {
+    const res = await submitBatchAnswers({
+      answers,
+      session_id: examSessionId.value
+    })
+    // 按 question_id 映射结果
+    const resultMap = {}
+    res.data.data.forEach((r, i) => {
+      resultMap[answers[i].question_id] = r
+    })
+    const orderedResults = []
+    for (let i = 0; i < questions.value.length; i++) {
+      const q = questions.value[i]
+      const result = resultMap[q.id] || null
+      orderedResults[i] = result
+    }
+    examResults.value = orderedResults
+    showExamResults.value = true
+  } catch (err) {
+    console.error('Failed to submit batch answers:', err)
+  }
+}
+
+// ====== 公共 ======
 
 async function restartQuiz() {
   await loadQuestions()
@@ -326,25 +685,40 @@ async function restartQuiz() {
   margin: 0 auto;
 }
 
-/* Progress bar */
-.progress-bar {
-  margin-bottom: 1.25rem;
-}
-
-.progress-info {
+/* ====== Top bar ====== */
+.top-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.75rem;
   margin-bottom: 0.5rem;
 }
 
-.progress-text {
+.mode-badge {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.15rem 0.6rem;
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+
+.mode-analysis {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.mode-exam {
+  background: #fce7f3;
+  color: #db2777;
+}
+
+.top-progress {
+  flex: 1;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--text);
 }
 
-.progress-score {
+.top-stats {
   display: flex;
   gap: 0.75rem;
   font-size: 0.85rem;
@@ -354,17 +728,12 @@ async function restartQuiz() {
 .score-correct { color: var(--success); }
 .score-wrong { color: var(--error); }
 
-.progress-center {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-}
-
 .progress-track {
   height: 6px;
   background: var(--border);
   border-radius: 3px;
   overflow: hidden;
+  margin-bottom: 1.25rem;
 }
 
 .progress-fill {
@@ -374,7 +743,7 @@ async function restartQuiz() {
   transition: width 0.3s ease;
 }
 
-/* Loading */
+/* ====== Loading ====== */
 .loading {
   text-align: center;
   padding: 4rem;
@@ -394,17 +763,17 @@ async function restartQuiz() {
   to { transform: rotate(360deg); }
 }
 
-/* Empty */
+/* ====== Empty ====== */
 .empty, .finished {
   text-align: center;
-  padding: 3rem;
+  padding: 1rem 0;
 }
 
 .empty-icon {
   margin-bottom: 1rem;
 }
 
-/* Finished */
+/* ====== Finished card ====== */
 .finished-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -507,9 +876,255 @@ async function restartQuiz() {
   display: flex;
   gap: 0.75rem;
   justify-content: center;
+  margin-top: 2rem;
 }
 
-/* Question card */
+/* ====== Analysis list (shared between modes) ====== */
+.exam-analysis-list {
+  text-align: left;
+  margin-top: 1rem;
+}
+
+.analysis-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 1rem;
+  text-align: left;
+  padding-left: 0.25rem;
+}
+
+.analysis-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.analysis-correct {
+  border-left: 4px solid var(--success);
+}
+
+.analysis-wrong {
+  border-left: 4px solid var(--error);
+}
+
+.analysis-unanswered {
+  border-left: 4px solid var(--text-muted);
+  opacity: 0.8;
+}
+
+.analysis-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.analysis-number {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-hover);
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.analysis-type {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: var(--bg-hover);
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+}
+
+.analysis-status {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.status-correct { color: var(--success); }
+.status-wrong { color: var(--error); }
+
+.analysis-content {
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--text);
+  margin-bottom: 0.5rem;
+  white-space: pre-wrap;
+}
+
+.analysis-detail {
+  display: flex;
+  gap: 1.25rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.4rem;
+}
+
+.analysis-user-answer {
+  color: var(--text-secondary);
+}
+
+.analysis-correct-answer {
+  color: var(--success);
+}
+
+.analysis-explanation {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  background: var(--bg-hover);
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.6rem;
+}
+
+/* Analysis options */
+.analysis-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.analysis-option {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+
+.aopt-letter {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-hover);
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.aopt-selected.aopt-correct {
+  border-color: var(--success);
+  background: var(--success-bg);
+}
+.aopt-selected.aopt-correct .aopt-letter {
+  background: var(--success);
+  color: white;
+}
+
+.aopt-selected.aopt-wrong {
+  border-color: var(--error);
+  background: var(--error-bg);
+}
+.aopt-selected.aopt-wrong .aopt-letter {
+  background: var(--error);
+  color: white;
+}
+
+.aopt-correct:not(.aopt-selected) {
+  border-color: var(--success);
+  border-style: dashed;
+}
+.aopt-correct:not(.aopt-selected) .aopt-letter {
+  background: var(--success);
+  color: white;
+}
+
+.aopt-text {
+  flex: 1;
+  color: var(--text);
+}
+
+/* ====== Exam mode ====== */
+.exam-container {
+  margin-top: 0.25rem;
+}
+
+.exam-progress-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.exam-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.exam-question-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 1.5rem;
+  transition: border-color 0.2s ease;
+}
+
+.exam-answered {
+  border-color: var(--primary-light);
+}
+
+.eq-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.eq-number {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-bg);
+  color: var(--primary);
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.82rem;
+  flex-shrink: 0;
+}
+
+.eq-content {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text);
+  margin-bottom: 1rem;
+  white-space: pre-wrap;
+}
+
+.exam-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem 0;
+  border-top: 1px solid var(--border-light);
+}
+
+.exam-actions-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* ====== Question card (analysis mode) ====== */
 .question-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -555,7 +1170,7 @@ async function restartQuiz() {
   white-space: pre-wrap;
 }
 
-/* Options */
+/* Options (shared) */
 .options {
   display: flex;
   flex-direction: column;
@@ -765,17 +1380,19 @@ async function restartQuiz() {
   border-color: var(--text-muted);
 }
 
-/* Mobile responsive */
+/* Mobile */
 @media (max-width: 768px) {
   .quiz-view {
     max-width: 100%;
   }
 
-  .question-card {
+  .question-card,
+  .exam-question-card {
     padding: 1.25rem;
   }
 
-  .question-content {
+  .question-content,
+  .eq-content {
     font-size: 1rem;
     line-height: 1.7;
   }
@@ -827,6 +1444,15 @@ async function restartQuiz() {
   .finished-actions .btn {
     width: 100%;
     justify-content: center;
+  }
+
+  .exam-questions {
+    gap: 0.75rem;
+  }
+
+  .analysis-detail {
+    flex-direction: column;
+    gap: 0.25rem;
   }
 }
 </style>

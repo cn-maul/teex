@@ -9,6 +9,7 @@ import (
 	"exam-quiz/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // StartQuizRequest 开始刷题请求
@@ -50,6 +51,10 @@ func StartQuiz(c *gin.Context) {
 
 	// 验证模块是否存在
 	if _, err := repository.GetModule(req.ModuleID); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "模块不存在"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "模块不存在"})
 		return
 	}
@@ -211,18 +216,46 @@ func GetSession(c *gin.Context) {
 
 	session, err := service.GetSession(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "场次不存在"})
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "场次不存在"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": session})
 }
 
-// GetSessionAnswers 获取某个场次的答题记录
+// GetSessionAnswers 获取某个场次的答题记录（支持分页）
 func GetSessionAnswers(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的场次 ID"})
+		return
+	}
+
+	// 检查分页参数
+	pageStr := c.Query("page")
+	sizeStr := c.Query("size")
+
+	if pageStr != "" || sizeStr != "" {
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+		size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
+		if page < 1 {
+			page = 1
+		}
+		if size < 1 || size > 100 {
+			size = 20
+		}
+
+		answers, total, err := repository.GetSessionAnswersPaginated(uint(id), page, size)
+		if err != nil {
+			log.Printf("GetSessionAnswers error: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"data": answers, "total": total})
 		return
 	}
 

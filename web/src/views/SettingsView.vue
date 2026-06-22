@@ -27,6 +27,31 @@
         </div>
       </div>
 
+      <div class="setting-item">
+        <div class="setting-info">
+          <label class="setting-label">刷题模式</label>
+          <p class="setting-desc">解析模式：逐题作答，即时反馈；考试模式：全部答完再统一评分</p>
+        </div>
+        <div class="setting-control mode-control">
+          <button 
+            class="mode-btn" 
+            :class="{ active: examStore.settings.quizMode === 'analysis' }"
+            @click="examStore.updateQuizMode('analysis')"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            解析模式
+          </button>
+          <button 
+            class="mode-btn" 
+            :class="{ active: examStore.settings.quizMode === 'exam' }"
+            @click="examStore.updateQuizMode('exam')"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            考试模式
+          </button>
+        </div>
+      </div>
+
     </div>
 
     <div class="settings-section">
@@ -220,5 +245,42 @@ h1 {
 
 .btn-danger:hover {
   background: #fecaca;
+}
+
+/* Mode toggle */
+.mode-control {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.mode-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mode-btn:hover {
+  border-color: var(--primary-light);
+  background: var(--primary-bg);
+}
+
+.mode-btn.active {
+  border-color: var(--primary);
+  background: var(--primary-bg);
+  color: var(--primary);
 }
 </style>

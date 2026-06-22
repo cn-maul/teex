@@ -72,7 +72,6 @@ export const submitBatchAnswers = (data) => api.post('/quiz/submit-batch', data)
 // 统计
 export const getStats = () => api.get('/stats')
 export const getModuleStats = (id) => api.get(`/stats/module/${id}`)
-
 // 数据管理
 export const deleteRecords = () => api.delete('/records')
 
