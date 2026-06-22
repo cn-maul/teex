@@ -21,26 +21,15 @@ import (
 )
 
 func main() {
-	// 获取可执行文件所在目录
-	execPath, err := os.Executable()
-	if err != nil {
-		log.Fatalf("failed to get executable path: %v", err)
+	// 数据库默认存放在当前目录
+	dbDir := "."
+	if dir := os.Getenv("DATA_DIR"); dir != "" {
+		dbDir = dir
 	}
-	execDir := filepath.Dir(execPath)
-
-	// 如果是从 go run 运行，使用当前目录
-	// go run 会在 /tmp/go-build... 下编译临时二进制
-	if strings.Contains(execPath, "/go-build") || strings.Contains(execPath, string(os.PathSeparator)+"tmp"+string(os.PathSeparator)) {
-		execDir, _ = os.Getwd()
-	}
-
-	// 数据库路径
-	dbPath := filepath.Join(execDir, "data", "exam-quiz.db")
-	seedDir := filepath.Join(execDir, "data", "seed")
+	dbPath := filepath.Join(dbDir, "exam-quiz.db")
 
 	// 确保目录存在
-	os.MkdirAll(filepath.Dir(dbPath), 0755)
-	os.MkdirAll(seedDir, 0755)
+	os.MkdirAll(dbDir, 0755)
 
 	// 初始化数据库
 	fmt.Println("Initializing database...")
@@ -48,9 +37,9 @@ func main() {
 		log.Fatalf("failed to initialize database: %v", err)
 	}
 
-	// 加载种子数据
+	// 加载种子数据（从嵌入的二进制数据）
 	fmt.Println("Loading seed data...")
-	if err := database.Seed(seedDir); err != nil {
+	if err := database.Seed(); err != nil {
 		log.Printf("warning: failed to load seed data: %v", err)
 	}
 
@@ -108,30 +97,28 @@ func setupStaticFiles(r *gin.Engine, distFS fs.FS) {
 			return
 		}
 
-		// 防路径遍历
-		cleaned := filepath.Clean(strings.TrimPrefix(path, "/"))
-		if strings.Contains(cleaned, "..") {
-			path = "/"
-			cleaned = ""
+		// 防路径遍历（URL 路径始终用正斜杠）
+		if strings.Contains(path, "..") {
+			c.Request.URL.Path = "/"
+			fileServer.ServeHTTP(c.Writer, c.Request)
+			return
 		}
 
 		// 尝试打开文件，不存在则回退到 index.html（SPA）
+		// 注意：embed.FS 只认正斜杠，不能用 filepath.Clean
+		cleaned := strings.TrimPrefix(path, "/")
 		if cleaned != "" {
 			if f, err := distFS.Open(cleaned); err != nil {
-				path = "/"
+				c.Request.URL.Path = "/"
+				fileServer.ServeHTTP(c.Writer, c.Request)
+				return
 			} else {
 				f.Close()
 			}
 		}
 
-		// 统一用 FileServer 服务
-		if path == "/" || path == "" {
-			c.Request.URL.Path = "/"
-			fileServer.ServeHTTP(c.Writer, c.Request)
-			c.Request.URL.Path = path
-			return
-		}
-
+		// 存在则直接服务
+		c.Request.URL.Path = path
 		fileServer.ServeHTTP(c.Writer, c.Request)
 	})
 }

@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"exam-quiz/internal/model"
 
-	"gorm.io/driver/sqlite"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -62,33 +61,6 @@ func Init(dbPath string) error {
 	return nil
 }
 
-// Seed 加载种子数据
-func Seed(seedDir string) error {
-	// 检查是否已有数据
-	var count int64
-	DB.Model(&model.ExamType{}).Count(&count)
-	if count > 0 {
-		fmt.Println("Database already seeded, skipping...")
-		return nil
-	}
-
-	// 在事务中加载种子数据，确保原子性
-	return DB.Transaction(func(tx *gorm.DB) error {
-		// 加载考试类型和模块
-		if err := seedExamTypesTx(tx, filepath.Join(seedDir, "exams.json")); err != nil {
-			return fmt.Errorf("failed to seed exam types: %w", err)
-		}
-
-		// 加载示例题目
-		if err := seedQuestionsTx(tx, filepath.Join(seedDir, "questions_sample.json")); err != nil {
-			return fmt.Errorf("failed to seed questions: %w", err)
-		}
-
-		fmt.Println("Database seeded successfully!")
-		return nil
-	})
-}
-
 type ExamSeed struct {
 	Name    string `json:"name"`
 	Remark  string `json:"remark"`
@@ -98,12 +70,7 @@ type ExamSeed struct {
 	} `json:"modules"`
 }
 
-func seedExamTypesTx(tx *gorm.DB, filePath string) error {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
+func seedExamTypesTx(tx *gorm.DB, data []byte) error {
 	var exams []ExamSeed
 	if err := json.Unmarshal(data, &exams); err != nil {
 		return err
@@ -145,12 +112,7 @@ type QuestionSeed struct {
 	Source     string `json:"source"`
 }
 
-func seedQuestionsTx(tx *gorm.DB, filePath string) error {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
+func seedQuestionsTx(tx *gorm.DB, data []byte) error {
 	var questions []QuestionSeed
 	if err := json.Unmarshal(data, &questions); err != nil {
 		return err

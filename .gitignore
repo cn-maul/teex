@@ -1,5 +1,6 @@
 # Compiled binaries
 /server
+/myapp.exe
 cmd/server/server
 
 # SQLite database files
