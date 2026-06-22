@@ -5,6 +5,10 @@
 /teex-windows-*
 cmd/server/server
 
+# Go build cache (project-local, for read-only /home)
+.go-build/
+.go-cache/
+
 # SQLite database files
 *.db
 *.db-shm
