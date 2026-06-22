@@ -37,10 +37,11 @@ type Question struct {
 // UserAnswer 答题记录
 type UserAnswer struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`
-	QuestionID    uint      `gorm:"index" json:"question_id"`
+	UserID        uint      `gorm:"index" json:"user_id"`
+	QuestionID    uint      `gorm:"index:idx_question_id;index:idx_qid_correct" json:"question_id"`
 	ExamSessionID uint      `gorm:"index" json:"exam_session_id"`
 	UserInput     string    `gorm:"size:200" json:"user_input"` // 用户选择
-	IsCorrect     bool      `json:"is_correct"`
+	IsCorrect     bool      `gorm:"index:idx_qid_correct" json:"is_correct"`
 	Duration      int       `json:"duration"` // 用时（秒）
 	CreatedAt     time.Time `json:"created_at"`
 	Question      *Question `gorm:"foreignKey:QuestionID" json:"question,omitempty"`
@@ -50,6 +51,7 @@ type UserAnswer struct {
 // ExamSession 考试场次记录
 type ExamSession struct {
 	ID           uint       `gorm:"primaryKey" json:"id"`
+	UserID       uint       `gorm:"index" json:"user_id"`
 	ModuleID     uint       `gorm:"index" json:"module_id"`
 	Mode         string     `gorm:"size:20" json:"mode"` // practice / exam
 	TotalCount   int        `json:"total_count"`

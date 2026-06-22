@@ -18,21 +18,25 @@ func GetQuestion(id uint) (*model.Question, error) {
 
 // CreateQuestion 创建题目
 func CreateQuestion(question *model.Question) error {
+	defer InvalidateAllStatsCache()
 	return repository.CreateQuestion(question)
 }
 
 // UpdateQuestion 更新题目
 func UpdateQuestion(question *model.Question) error {
+	defer InvalidateAllStatsCache()
 	return repository.UpdateQuestion(question)
 }
 
 // DeleteQuestion 删除题目
 func DeleteQuestion(id uint) error {
+	defer InvalidateAllStatsCache()
 	return repository.DeleteQuestion(id)
 }
 
 // BatchImportQuestions 批量导入题目
 func BatchImportQuestions(questions []model.Question) (int, error) {
+	defer InvalidateAllStatsCache()
 	if len(questions) == 0 {
 		return 0, nil
 	}
@@ -44,7 +48,7 @@ func BatchImportQuestions(questions []model.Question) (int, error) {
 }
 
 // StartQuiz 开始刷题（返回题目列表 + 场次ID）
-func StartQuiz(moduleID uint, count int, mode string, difficulty int, tags string) ([]model.Question, uint, error) {
+func StartQuiz(moduleID uint, count int, mode string, difficulty int, tags string, userID uint) ([]model.Question, uint, error) {
 	if count <= 0 {
 		count = 10
 	}
@@ -96,6 +100,7 @@ func StartQuiz(moduleID uint, count int, mode string, difficulty int, tags strin
 		ModuleID:   moduleID,
 		Mode:       mode,
 		TotalCount: len(questions),
+		UserID:     userID,
 	}
 	if createErr := repository.CreateSession(session); createErr != nil {
 		return nil, 0, fmt.Errorf("创建考试场次失败: %w", createErr)

@@ -20,37 +20,43 @@ func GetExamType(id uint) (*model.ExamType, error) {
 }
 
 // GetModulesByExamID 获取某考试类型下的模块列表（含题目数，单次查询）
-func GetModulesByExamID(examTypeID uint) ([]model.ModuleWithStats, error) {
-	return repository.GetModulesByExamIDWithStats(examTypeID)
+func GetModulesByExamID(examTypeID uint, userID uint) ([]model.ModuleWithStats, error) {
+	return repository.GetModulesByExamIDWithStats(examTypeID, userID)
 }
 
 // CreateExamType 创建考试类型
 func CreateExamType(exam *model.ExamType) error {
+	defer InvalidateAllStatsCache()
 	return repository.CreateExamType(exam)
 }
 
 // UpdateExamType 更新考试类型
 func UpdateExamType(exam *model.ExamType) error {
+	defer InvalidateAllStatsCache()
 	return repository.UpdateExamType(exam)
 }
 
 // DeleteExamType 删除考试类型
 func DeleteExamType(id uint) error {
+	defer InvalidateAllStatsCache()
 	return repository.DeleteExamType(id)
 }
 
 // CreateModule 创建模块
 func CreateModule(module *model.Module) error {
+	defer InvalidateAllStatsCache()
 	return repository.CreateModule(module)
 }
 
 // UpdateModule 更新模块
 func UpdateModule(module *model.Module) error {
+	defer InvalidateAllStatsCache()
 	return repository.UpdateModule(module)
 }
 
 // DeleteModule 删除模块
 func DeleteModule(id uint) error {
+	defer InvalidateAllStatsCache()
 	return repository.DeleteModule(id)
 }
 
@@ -90,15 +96,20 @@ func ExportAllData() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 一次查出所有模块，按 exam_type_id 分组
+	allModules, err := repository.ListAllModules()
+	if err != nil {
+		return nil, err
+	}
+	moduleMap := make(map[uint][]model.Module)
+	for _, m := range allModules {
+		moduleMap[m.ExamTypeID] = append(moduleMap[m.ExamTypeID], m)
+	}
 	for i := range exams {
-		modules, err := repository.GetModulesByExamID(exams[i].ID)
-		if err != nil {
-			return nil, err
-		}
-		exams[i].Modules = modules
+		exams[i].Modules = moduleMap[exams[i].ID]
 	}
 
-	questions, _, err := repository.ListQuestions(repository.QuestionFilter{Size: 10000})
+	questions, err := repository.ListAllQuestions()
 	if err != nil {
 		return nil, err
 	}
@@ -150,14 +161,17 @@ func ImportFullData(data FullImportData) (*FullImportResult, error) {
 				result.ModulesCreated++
 			}
 
-			// 创建题目
+			// 创建题目（批量插入）
+			var newQuestions []model.Question
 			for _, q := range mod.Questions {
 				newQ := q.Question
 				newQ.ModuleID = newMod.ID // 更新为新模块的 ID
-				if err := repository.CreateQuestion(&newQ); err != nil {
-					continue
+				newQuestions = append(newQuestions, newQ)
+			}
+			if len(newQuestions) > 0 {
+				if err := repository.BatchCreateQuestions(newQuestions); err == nil {
+					result.QuestionsCreated += len(newQuestions)
 				}
-				result.QuestionsCreated++
 			}
 		}
 	}
@@ -196,14 +210,28 @@ func setCache(key string, data interface{}) {
 	})
 }
 
+// InvalidateStatsCache 清除指定用户的统计缓存（答题提交后调用）
+func InvalidateStatsCache(moduleID uint, userID uint) {
+	statsCache.Delete(fmt.Sprintf("overall_stats:%d", userID))
+	statsCache.Delete(fmt.Sprintf("module_stats:%d:%d", moduleID, userID))
+}
+
+// InvalidateAllStatsCache 清除全部统计缓存（管理员修改题目/考试/模块后调用）
+func InvalidateAllStatsCache() {
+	statsCache.Range(func(key, _ interface{}) bool {
+		statsCache.Delete(key)
+		return true
+	})
+}
+
 // GetModuleStats 获取模块统计（带缓存）
-func GetModuleStats(moduleID uint) (*repository.StatsResult, error) {
-	cacheKey := "module_stats:" + fmt.Sprint(moduleID)
+func GetModuleStats(moduleID uint, userID uint) (*repository.StatsResult, error) {
+	cacheKey := fmt.Sprintf("module_stats:%d:%d", moduleID, userID)
 	if cached, ok := getFromCache(cacheKey); ok {
 		return cached.(*repository.StatsResult), nil
 	}
 
-	stats, err := repository.GetModuleStats(moduleID)
+	stats, err := repository.GetModuleStats(moduleID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -213,13 +241,13 @@ func GetModuleStats(moduleID uint) (*repository.StatsResult, error) {
 }
 
 // GetOverallStats 获取全局统计（带缓存）
-func GetOverallStats() (*repository.StatsResult, error) {
-	cacheKey := "overall_stats"
+func GetOverallStats(userID uint) (*repository.StatsResult, error) {
+	cacheKey := fmt.Sprintf("overall_stats:%d", userID)
 	if cached, ok := getFromCache(cacheKey); ok {
 		return cached.(*repository.StatsResult), nil
 	}
 
-	stats, err := repository.GetOverallStats()
+	stats, err := repository.GetOverallStats(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -228,12 +256,12 @@ func GetOverallStats() (*repository.StatsResult, error) {
 	return stats, nil
 }
 
-// GetRecentAnswers 获取最近的答题记录
-func GetRecentAnswers(limit int) ([]model.UserAnswer, error) {
-	return repository.GetRecentAnswers(limit)
+// GetRecentAnswers 获取最近的答题记录（按用户隔离）
+func GetRecentAnswers(limit int, userID uint) ([]model.UserAnswer, error) {
+	return repository.GetRecentAnswers(limit, userID)
 }
 
-// ClearAllRecords 清除所有答题记录
-func ClearAllRecords() error {
-	return repository.ClearAllRecords()
+// ClearAllRecords 清除当前用户的所有答题记录
+func ClearAllRecords(userID uint) error {
+	return repository.ClearAllRecords(userID)
 }

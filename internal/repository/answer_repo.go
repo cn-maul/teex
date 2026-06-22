@@ -31,7 +31,7 @@ type StatsResult struct {
 }
 
 // GetModuleStats 获取某模块的统计（正确率取每题最后一次答题记录）
-func GetModuleStats(moduleID uint) (*StatsResult, error) {
+func GetModuleStats(moduleID uint, userID uint) (*StatsResult, error) {
 	// 题目总数
 	var totalQuestions int64
 	err := database.DB.Model(&model.Question{}).
@@ -41,33 +41,28 @@ func GetModuleStats(moduleID uint) (*StatsResult, error) {
 		return nil, err
 	}
 
-	// 已做题数（去重）
-	var totalAnswered int64
-	err = database.DB.Model(&model.UserAnswer{}).
-		Where("question_id IN (SELECT id FROM questions WHERE module_id = ?)", moduleID).
-		Distinct("question_id").
-		Count(&totalAnswered).Error
-	if err != nil {
-		return nil, err
+	// 已做题数和正确数：合并为一条查询
+	type statsRow struct {
+		TotalAnswered int64
+		CorrectCount  int64
 	}
-
-	// 正确数：取每题最后一次答题记录中 is_correct=true 的数量
-	var correctCount int64
+	var row statsRow
 	err = database.DB.Raw(`
-		SELECT COUNT(*) FROM (
-			SELECT question_id, is_correct
-			FROM user_answers
-			WHERE question_id IN (SELECT id FROM questions WHERE module_id = ?)
-			AND id IN (
-				SELECT MAX(id) FROM user_answers
-				WHERE question_id IN (SELECT id FROM questions WHERE module_id = ?)
-				GROUP BY question_id
-			)
-		) AS last_answers WHERE is_correct = true
-	`, moduleID, moduleID).Scan(&correctCount).Error
+		SELECT
+			COUNT(*) AS total_answered,
+			SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) AS correct_count
+		FROM user_answers
+		WHERE id IN (
+			SELECT MAX(id) FROM user_answers
+			WHERE question_id IN (SELECT id FROM questions WHERE module_id = ?) AND user_id = ?
+			GROUP BY question_id
+		)
+	`, moduleID, userID).Scan(&row).Error
 	if err != nil {
 		return nil, err
 	}
+	totalAnswered := row.TotalAnswered
+	correctCount := row.CorrectCount
 
 	var accuracy float64
 	if totalAnswered > 0 {
@@ -84,33 +79,35 @@ func GetModuleStats(moduleID uint) (*StatsResult, error) {
 }
 
 // GetOverallStats 获取全局统计（正确率取每题最后一次答题记录）
-func GetOverallStats() (*StatsResult, error) {
+func GetOverallStats(userID uint) (*StatsResult, error) {
 	var totalQuestions int64
 	err := database.DB.Model(&model.Question{}).Count(&totalQuestions).Error
 	if err != nil {
 		return nil, err
 	}
 
-	var totalAnswered int64
-	err = database.DB.Model(&model.UserAnswer{}).Distinct("question_id").Count(&totalAnswered).Error
-	if err != nil {
-		return nil, err
+	// 已做题数和正确数：合并为一条查询
+	type statsRow struct {
+		TotalAnswered int64
+		CorrectCount  int64
 	}
-
-	// 正确数：取每题最后一次答题记录中 is_correct=true 的数量
-	var correctCount int64
+	var row statsRow
 	err = database.DB.Raw(`
-		SELECT COUNT(*) FROM (
-			SELECT question_id, is_correct
-			FROM user_answers
-			WHERE id IN (
-				SELECT MAX(id) FROM user_answers GROUP BY question_id
-			)
-		) AS last_answers WHERE is_correct = true
-	`).Scan(&correctCount).Error
+		SELECT
+			COUNT(*) AS total_answered,
+			SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) AS correct_count
+		FROM user_answers
+		WHERE id IN (
+			SELECT MAX(id) FROM user_answers
+			WHERE user_id = ?
+			GROUP BY question_id
+		)
+	`, userID).Scan(&row).Error
 	if err != nil {
 		return nil, err
 	}
+	totalAnswered := row.TotalAnswered
+	correctCount := row.CorrectCount
 
 	var accuracy float64
 	if totalAnswered > 0 {
@@ -126,10 +123,11 @@ func GetOverallStats() (*StatsResult, error) {
 	}, nil
 }
 
-// GetRecentAnswers 获取最近的答题记录
-func GetRecentAnswers(limit int) ([]model.UserAnswer, error) {
+// GetRecentAnswers 获取最近的答题记录（按用户隔离）
+func GetRecentAnswers(limit int, userID uint) ([]model.UserAnswer, error) {
 	var answers []model.UserAnswer
 	err := database.DB.Preload("Question").
+		Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Limit(limit).
 		Find(&answers).Error
@@ -143,13 +141,13 @@ func ClearModuleRecords(moduleID uint) error {
 		Delete(&model.UserAnswer{}).Error
 }
 
-// ClearAllRecords 清除所有答题记录和考试场次
-func ClearAllRecords() error {
+// ClearAllRecords 清除当前用户的所有答题记录和考试场次
+func ClearAllRecords(userID uint) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("1 = 1").Delete(&model.UserAnswer{}).Error; err != nil {
+		if err := tx.Where("user_id = ?", userID).Delete(&model.UserAnswer{}).Error; err != nil {
 			return err
 		}
-		return tx.Where("1 = 1").Delete(&model.ExamSession{}).Error
+		return tx.Where("user_id = ?", userID).Delete(&model.ExamSession{}).Error
 	})
 }
 

@@ -41,6 +41,13 @@ func GetModuleByNameAndExamID(name string, examTypeID uint) (*model.Module, erro
 	return &module, nil
 }
 
+// ListAllModules 获取所有模块
+func ListAllModules() ([]model.Module, error) {
+	var modules []model.Module
+	err := database.DB.Order("exam_type_id ASC, sort ASC").Find(&modules).Error
+	return modules, err
+}
+
 // GetModulesByExamID 获取某考试类型下的所有模块
 func GetModulesByExamID(examTypeID uint) ([]model.Module, error) {
 	var modules []model.Module
@@ -137,16 +144,16 @@ func DeleteModule(id uint) error {
 }
 
 // GetModulesByExamIDWithStats 获取某考试类型下的模块列表（含题目数和未做题数，单次查询）
-func GetModulesByExamIDWithStats(examTypeID uint) ([]model.ModuleWithStats, error) {
+func GetModulesByExamIDWithStats(examTypeID uint, userID uint) ([]model.ModuleWithStats, error) {
 	var results []model.ModuleWithStats
 	err := database.DB.Raw(`
 		SELECT m.*,
 			COALESCE((SELECT COUNT(*) FROM questions q WHERE q.module_id = m.id), 0) AS question_count,
 			COALESCE((SELECT COUNT(*) FROM questions q WHERE q.module_id = m.id
-				AND q.id NOT IN (SELECT question_id FROM user_answers)), 0) AS unanswered
+				AND NOT EXISTS (SELECT 1 FROM user_answers WHERE user_answers.question_id = q.id AND user_answers.user_id = ?)), 0) AS unanswered
 		FROM modules m
 		WHERE m.exam_type_id = ?
 		ORDER BY m.sort ASC
-	`, examTypeID).Scan(&results).Error
+	`, userID, examTypeID).Scan(&results).Error
 	return results, err
 }

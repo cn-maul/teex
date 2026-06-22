@@ -42,10 +42,37 @@ function showToast(message, type = 'error') {
   }, 3000)
 }
 
+// 请求拦截器：自动注入 token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => Promise.reject(error)
+)
+
+// 正在跳转登录页标记，防止 401 循环
+let isRedirectingToLogin = false
+
 // 响应拦截器：统一错误处理
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error.response?.status === 401) {
+      // 清除认证状态
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      // 防止循环重定向：只跳转一次
+      if (!isRedirectingToLogin) {
+        isRedirectingToLogin = true
+        // 用 location.replace 避免在 history 中留下可回退的记录
+        window.location.replace('/login')
+      }
+      return Promise.reject(error)
+    }
     const message = error.response?.data?.error
       || (error.code === 'ECONNABORTED' ? '请求超时，请稍后重试' : '网络错误，请检查连接')
     showToast(message)
@@ -90,6 +117,11 @@ export const deleteExamType = (id) => api.delete(`/exams/${id}`)
 export const createModule = (data) => api.post('/modules', data)
 export const updateModule = (id, data) => api.put(`/modules/${id}`, data)
 export const deleteModule = (id) => api.delete(`/modules/${id}`)
+
+// 认证
+export const login = (data) => api.post('/auth/login', data)
+export const register = (data) => api.post('/auth/register', data)
+export const getProfile = () => api.get('/profile')
 
 export default api
 export { showToast }

@@ -1,69 +1,85 @@
 <template>
   <div id="app">
-    <!-- 顶部导航栏 -->
-    <nav class="navbar">
-      <div class="nav-left">
-        <div class="nav-brand" @click="$router.push('/')">
-          <span class="brand-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg></span>
-          <span class="brand-text">公考刷题</span>
+    <!-- 未登录：只显示 router-view（登录页自己管理布局） -->
+    <template v-if="!authStore.isLoggedIn">
+      <router-view />
+    </template>
+
+    <!-- 已登录：完整布局 -->
+    <template v-else>
+      <!-- 顶部导航栏 -->
+      <nav class="navbar">
+        <div class="nav-left">
+          <div class="nav-brand" @click="$router.push('/')">
+            <span class="brand-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg></span>
+            <span class="brand-text">公考刷题</span>
+          </div>
+
+          <!-- 考试类型自定义下拉 -->
+          <div class="exam-selector" v-if="examStore.state.examList.length > 0" ref="dropdownRef">
+            <button class="exam-trigger" @click="dropdownOpen = !dropdownOpen">
+              <span class="exam-trigger-text">{{ examStore.state.currentExamName || '选择考试' }}</span>
+              <span class="exam-trigger-arrow" :class="{ open: dropdownOpen }">▾</span>
+            </button>
+            <Transition name="dropdown">
+              <div class="exam-dropdown" v-if="dropdownOpen">
+                <button
+                  v-for="exam in examStore.state.examList"
+                  :key="exam.id"
+                  class="exam-option"
+                  :class="{ active: exam.id === examStore.state.currentExamId }"
+                  @click="selectExam(exam)"
+                >
+                  <span class="exam-option-dot" v-if="exam.id === examStore.state.currentExamId"></span>
+                  {{ exam.name }}
+                </button>
+              </div>
+            </Transition>
+          </div>
         </div>
 
-        <!-- 考试类型自定义下拉 -->
-        <div class="exam-selector" v-if="examStore.state.examList.length > 0" ref="dropdownRef">
-          <button class="exam-trigger" @click="dropdownOpen = !dropdownOpen">
-            <span class="exam-trigger-text">{{ examStore.state.currentExamName || '选择考试' }}</span>
-            <span class="exam-trigger-arrow" :class="{ open: dropdownOpen }">▾</span>
-          </button>
-          <Transition name="dropdown">
-            <div class="exam-dropdown" v-if="dropdownOpen">
-              <button
-                v-for="exam in examStore.state.examList"
-                :key="exam.id"
-                class="exam-option"
-                :class="{ active: exam.id === examStore.state.currentExamId }"
-                @click="selectExam(exam)"
-              >
-                <span class="exam-option-dot" v-if="exam.id === examStore.state.currentExamId"></span>
-                {{ exam.name }}
-              </button>
-            </div>
-          </Transition>
+        <div class="nav-right">
+          <span class="exam-badge" v-if="examStore.state.currentExamName">
+            {{ examStore.state.currentExamName }}
+          </span>
         </div>
-      </div>
+      </nav>
 
-      <div class="nav-right">
-        <span class="exam-badge" v-if="examStore.state.currentExamName">
-          {{ examStore.state.currentExamName }}
-        </span>
+      <!-- 主体布局 -->
+      <div class="layout">
+        <Sidebar />
+        <main class="main-content">
+          <router-view />
+        </main>
+        <StatsPanel />
       </div>
-    </nav>
-
-    <!-- 主体布局 -->
-    <div class="layout">
-      <Sidebar />
-      <main class="main-content">
-        <router-view />
-      </main>
-      <StatsPanel />
-    </div>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useExamStore } from './stores/exam'
+import { useAuthStore } from './stores/auth.js'
 import Sidebar from './components/Sidebar.vue'
 import StatsPanel from './components/StatsPanel.vue'
 
 const router = useRouter()
 const examStore = useExamStore()
+const authStore = useAuthStore()
 
 const dropdownOpen = ref(false)
 const dropdownRef = ref(null)
 
-onMounted(async () => {
-  await examStore.loadExams()
+// 监听登录状态变化：登录后加载考试列表，加载完成再允许路由跳转
+watch(() => authStore.isLoggedIn, async (loggedIn) => {
+  if (loggedIn) {
+    await examStore.loadExams()
+  }
+}, { immediate: true })
+
+onMounted(() => {
   document.addEventListener('click', handleClickOutside)
 })
 

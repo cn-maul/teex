@@ -48,6 +48,7 @@ func Init(dbPath string) error {
 
 	// 自动建表
 	err = DB.AutoMigrate(
+		&model.User{},
 		&model.ExamType{},
 		&model.Module{},
 		&model.Question{},

@@ -152,6 +152,23 @@ func UpdateQuestion(c *gin.Context) {
 	}
 	question.ID = uint(id)
 
+	// 验证难度范围
+	if question.Difficulty < 1 || question.Difficulty > 5 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "难度范围必须在 1-5 之间"})
+		return
+	}
+	// 验证题目类型
+	validTypes := map[string]bool{"single": true, "multi": true, "judge": true, "fill": true}
+	if !validTypes[question.Type] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的题目类型，支持: single/multi/judge/fill"})
+		return
+	}
+	// 验证必填字段
+	if question.Content == "" || question.Answer == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "题干和答案不能为空"})
+		return
+	}
+
 	if err := service.UpdateQuestion(&question); err != nil {
 		log.Printf("UpdateQuestion error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})

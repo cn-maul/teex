@@ -59,7 +59,8 @@ func StartQuiz(c *gin.Context) {
 		return
 	}
 
-	questions, sessionID, err := service.StartQuiz(req.ModuleID, req.Count, req.Mode, req.Difficulty, req.Tags)
+	userID, _ := c.Get("user_id")
+	questions, sessionID, err := service.StartQuiz(req.ModuleID, req.Count, req.Mode, req.Difficulty, req.Tags, userID.(uint))
 	if err != nil {
 		log.Printf("StartQuiz error: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -80,6 +81,7 @@ type SubmitAnswerRequest struct {
 	QuestionID uint   `json:"question_id" binding:"required"`
 	UserInput  string `json:"user_input" binding:"required"`
 	Duration   int    `json:"duration"`
+	SessionID  uint   `json:"session_id"`
 }
 
 // SubmitAnswer 提交答案
@@ -96,7 +98,8 @@ func SubmitAnswer(c *gin.Context) {
 		return
 	}
 
-	result, err := service.SubmitAnswer(req.QuestionID, req.UserInput, req.Duration)
+	userID, _ := c.Get("user_id")
+	result, err := service.SubmitAnswer(req.QuestionID, req.UserInput, req.Duration, req.SessionID, userID.(uint))
 	if err != nil {
 		log.Printf("SubmitAnswer error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
@@ -129,10 +132,11 @@ func SubmitBatchAnswers(c *gin.Context) {
 	var results []service.AnswerResult
 	var err error
 
+	userID, _ := c.Get("user_id")
 	if req.SessionID > 0 {
-		results, err = service.SubmitBatchAnswersWithSession(req.SessionID, req.Answers)
+		results, err = service.SubmitBatchAnswersWithSession(req.SessionID, req.Answers, userID.(uint))
 	} else {
-		results, err = service.SubmitBatchAnswers(req.Answers)
+		results, err = service.SubmitBatchAnswers(req.Answers, userID.(uint))
 	}
 
 	if err != nil {
@@ -146,7 +150,8 @@ func SubmitBatchAnswers(c *gin.Context) {
 
 // GetStats 获取统计数据
 func GetStats(c *gin.Context) {
-	stats, err := service.GetOverallStats()
+	userID, _ := c.Get("user_id")
+	stats, err := service.GetOverallStats(userID.(uint))
 	if err != nil {
 		log.Printf("GetStats error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
@@ -164,7 +169,8 @@ func GetModuleStats(c *gin.Context) {
 		return
 	}
 
-	stats, err := service.GetModuleStats(uint(id))
+	userID, _ := c.Get("user_id")
+	stats, err := service.GetModuleStats(uint(id), userID.(uint))
 	if err != nil {
 		log.Printf("GetModuleStats error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
@@ -173,13 +179,16 @@ func GetModuleStats(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": stats})
 }
 
-// ClearAllRecords 清空所有答题记录
+// ClearAllRecords 清空当前用户的所有答题记录
 func ClearAllRecords(c *gin.Context) {
-	if err := service.ClearAllRecords(); err != nil {
+	userID, _ := c.Get("user_id")
+	if err := service.ClearAllRecords(userID.(uint)); err != nil {
 		log.Printf("ClearAllRecords error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
 		return
 	}
+	// 清除该用户的全部统计缓存
+	service.InvalidateStatsCache(0, userID.(uint))
 	c.JSON(http.StatusOK, gin.H{"message": "记录已清空"})
 }
 
@@ -196,7 +205,8 @@ func GetSessions(c *gin.Context) {
 		size = 20
 	}
 
-	sessions, total, err := service.GetSessions(page, size)
+	userID, _ := c.Get("user_id")
+	sessions, total, err := service.GetSessions(page, size, userID.(uint))
 	if err != nil {
 		log.Printf("GetSessions error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
@@ -214,7 +224,8 @@ func GetSession(c *gin.Context) {
 		return
 	}
 
-	session, err := service.GetSession(uint(id))
+	userID, _ := c.Get("user_id")
+	session, err := service.GetSession(uint(id), userID.(uint))
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "场次不存在"})
@@ -235,6 +246,8 @@ func GetSessionAnswers(c *gin.Context) {
 		return
 	}
 
+	userID, _ := c.Get("user_id")
+
 	// 检查分页参数
 	pageStr := c.Query("page")
 	sizeStr := c.Query("size")
@@ -249,8 +262,12 @@ func GetSessionAnswers(c *gin.Context) {
 			size = 20
 		}
 
-		answers, total, err := repository.GetSessionAnswersPaginated(uint(id), page, size)
+		answers, total, err := repository.GetSessionAnswersPaginated(uint(id), page, size, userID.(uint))
 		if err != nil {
+			if err == gorm.ErrRecordNotFound {
+				c.JSON(http.StatusNotFound, gin.H{"error": "场次不存在"})
+				return
+			}
 			log.Printf("GetSessionAnswers error: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
 			return
@@ -259,8 +276,12 @@ func GetSessionAnswers(c *gin.Context) {
 		return
 	}
 
-	answers, err := service.GetSessionAnswers(uint(id))
+	answers, err := service.GetSessionAnswers(uint(id), userID.(uint))
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "场次不存在"})
+			return
+		}
 		log.Printf("GetSessionAnswers error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
 		return

@@ -39,8 +39,9 @@ function saveSettings() {
   }))
 }
 
-// 初始化：从 localStorage 恢复
+// 初始化：从 localStorage 恢复（仅在已登录时）
 function initFromStorage() {
+  if (!localStorage.getItem('token')) return
   const saved = localStorage.getItem(STORAGE_KEY)
   if (saved) {
     try {
@@ -59,6 +60,8 @@ export function useExamStore() {
   // 加载考试列表
   async function loadExams() {
     if (state.examList.length > 0) return
+    // 未登录时不加载
+    if (!localStorage.getItem('token')) return
     state.loading = true
     try {
       const res = await getExamTypes()

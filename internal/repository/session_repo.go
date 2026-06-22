@@ -4,6 +4,8 @@ import (
 	"exam-quiz/internal/database"
 	"exam-quiz/internal/model"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // CreateSession 创建考试场次
@@ -20,15 +22,15 @@ func FinishSession(sessionID uint, correctCount int, duration int) error {
 	}).Error
 }
 
-// GetSessionByID 获取单个考试场次
-func GetSessionByID(id uint) (*model.ExamSession, error) {
+// GetSessionByID 获取单个考试场次（校验用户归属）
+func GetSessionByID(id uint, userID uint) (*model.ExamSession, error) {
 	var session model.ExamSession
-	err := database.DB.Preload("Module").First(&session, id).Error
+	err := database.DB.Preload("Module").Where("id = ? AND user_id = ?", id, userID).First(&session).Error
 	return &session, err
 }
 
 // GetSessions 获取考试场次列表（分页）
-func GetSessions(page, size int) ([]model.ExamSession, int64, error) {
+func GetSessions(page, size int, userID uint) ([]model.ExamSession, int64, error) {
 	var sessions []model.ExamSession
 	var total int64
 
@@ -40,8 +42,9 @@ func GetSessions(page, size int) ([]model.ExamSession, int64, error) {
 	}
 	offset := (page - 1) * size
 
-	database.DB.Model(&model.ExamSession{}).Count(&total)
+	database.DB.Model(&model.ExamSession{}).Where("user_id = ?", userID).Count(&total)
 	err := database.DB.Preload("Module").
+		Where("user_id = ?", userID).
 		Order("started_at DESC").
 		Offset(offset).Limit(size).
 		Find(&sessions).Error
@@ -49,8 +52,17 @@ func GetSessions(page, size int) ([]model.ExamSession, int64, error) {
 	return sessions, total, err
 }
 
-// GetSessionAnswers 获取某个场次的所有答题记录
-func GetSessionAnswers(sessionID uint) ([]model.UserAnswer, error) {
+// GetSessionAnswers 获取某个场次的所有答题记录（校验用户归属）
+func GetSessionAnswers(sessionID uint, userID uint) ([]model.UserAnswer, error) {
+	// 先校验场次归属
+	var count int64
+	if err := database.DB.Model(&model.ExamSession{}).Where("id = ? AND user_id = ?", sessionID, userID).Count(&count).Error; err != nil {
+		return nil, err
+	}
+	if count == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+
 	var answers []model.UserAnswer
 	err := database.DB.Preload("Question").
 		Where("exam_session_id = ?", sessionID).
@@ -59,8 +71,8 @@ func GetSessionAnswers(sessionID uint) ([]model.UserAnswer, error) {
 	return answers, err
 }
 
-// GetSessionAnswersPaginated 分页获取某个场次的答题记录
-func GetSessionAnswersPaginated(sessionID uint, page, size int) ([]model.UserAnswer, int64, error) {
+// GetSessionAnswersPaginated 分页获取某个场次的答题记录（校验用户归属）
+func GetSessionAnswersPaginated(sessionID uint, page, size int, userID uint) ([]model.UserAnswer, int64, error) {
 	var answers []model.UserAnswer
 	var total int64
 
@@ -71,6 +83,15 @@ func GetSessionAnswersPaginated(sessionID uint, page, size int) ([]model.UserAns
 		size = 20
 	}
 	offset := (page - 1) * size
+
+	// 先校验场次归属
+	var sessionCount int64
+	if err := database.DB.Model(&model.ExamSession{}).Where("id = ? AND user_id = ?", sessionID, userID).Count(&sessionCount).Error; err != nil {
+		return nil, 0, err
+	}
+	if sessionCount == 0 {
+		return nil, 0, gorm.ErrRecordNotFound
+	}
 
 	err := database.DB.Model(&model.UserAnswer{}).Where("exam_session_id = ?", sessionID).Count(&total).Error
 	if err != nil {

@@ -80,6 +80,7 @@ function getModuleIcon(name) {
 
 async function loadModules() {
   if (!examStore.state.currentExamId) return
+  if (!localStorage.getItem('token')) return
   loading.value = true
   try {
     const res = await getExamModules(examStore.state.currentExamId)

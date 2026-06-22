@@ -18,7 +18,7 @@ type AnswerResult struct {
 }
 
 // SubmitAnswer 提交答案
-func SubmitAnswer(questionID uint, userInput string, duration int) (*AnswerResult, error) {
+func SubmitAnswer(questionID uint, userInput string, duration int, sessionID uint, userID uint) (*AnswerResult, error) {
 	// 1. 获取题目
 	question, err := repository.GetQuestion(questionID)
 	if err != nil {
@@ -30,16 +30,21 @@ func SubmitAnswer(questionID uint, userInput string, duration int) (*AnswerResul
 
 	// 3. 保存答题记录
 	answer := &model.UserAnswer{
-		QuestionID: questionID,
-		UserInput:  userInput,
-		IsCorrect:  isCorrect,
-		Duration:   duration,
+		QuestionID:    questionID,
+		ExamSessionID: sessionID,
+		UserInput:     userInput,
+		IsCorrect:     isCorrect,
+		Duration:      duration,
+		UserID:        userID,
 	}
 	if err := repository.SaveAnswer(answer); err != nil {
 		return nil, fmt.Errorf("failed to save answer: %w", err)
 	}
 
-	// 4. 返回结果
+	// 4. 清除统计缓存
+	InvalidateStatsCache(question.ModuleID, userID)
+
+	// 5. 返回结果
 	return &AnswerResult{
 		IsCorrect:     isCorrect,
 		CorrectAnswer: question.Answer,
@@ -85,15 +90,65 @@ func sortedCompare(a, b string) bool {
 }
 
 // SubmitBatchAnswers 批量提交答案（考试模式交卷用）
-func SubmitBatchAnswers(answers []BatchAnswerItem) ([]AnswerResult, error) {
-	var results []AnswerResult
-	for _, a := range answers {
-		result, err := SubmitAnswer(a.QuestionID, a.UserInput, a.Duration)
-		if err != nil {
-			return nil, fmt.Errorf("failed to submit answer for question %d: %w", a.QuestionID, err)
-		}
-		results = append(results, *result)
+func SubmitBatchAnswers(answers []BatchAnswerItem, userID uint) ([]AnswerResult, error) {
+	if len(answers) == 0 {
+		return nil, nil
 	}
+
+	// 收集所有 question_id
+	ids := make([]uint, len(answers))
+	for i, a := range answers {
+		ids[i] = a.QuestionID
+	}
+
+	// 批量查询题目
+	questionMap, err := repository.BatchGetQuestions(ids)
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch get questions: %w", err)
+	}
+
+	// 内存中比对答案
+	var results []AnswerResult
+	var userAnswers []model.UserAnswer
+
+	for _, a := range answers {
+		question, ok := questionMap[a.QuestionID]
+		if !ok {
+			return nil, fmt.Errorf("question %d not found", a.QuestionID)
+		}
+
+		isCorrect := compareAnswers(question.Answer, a.UserInput, question.Type)
+
+		results = append(results, AnswerResult{
+			IsCorrect:     isCorrect,
+			CorrectAnswer: question.Answer,
+			Analysis:      question.Analysis,
+			UserInput:     a.UserInput,
+		})
+
+		userAnswers = append(userAnswers, model.UserAnswer{
+			QuestionID: a.QuestionID,
+			UserInput:  a.UserInput,
+			IsCorrect:  isCorrect,
+			Duration:   a.Duration,
+			UserID:     userID,
+		})
+	}
+
+	// 批量写入
+	if err := repository.BatchCreateAnswers(userAnswers); err != nil {
+		return nil, fmt.Errorf("failed to batch create answers: %w", err)
+	}
+
+	// 清除所有相关模块的统计缓存
+	seen := make(map[uint]bool)
+	for _, q := range questionMap {
+		if !seen[q.ModuleID] {
+			seen[q.ModuleID] = true
+			InvalidateStatsCache(q.ModuleID, userID)
+		}
+	}
+
 	return results, nil
 }
 
@@ -105,7 +160,7 @@ type BatchAnswerItem struct {
 }
 
 // SubmitBatchAnswersWithSession 批量提交答案并结束考试场次（批量查询+批量写入）
-func SubmitBatchAnswersWithSession(sessionID uint, answers []BatchAnswerItem) ([]AnswerResult, error) {
+func SubmitBatchAnswersWithSession(sessionID uint, answers []BatchAnswerItem, userID uint) ([]AnswerResult, error) {
 	if len(answers) == 0 {
 		return nil, nil
 	}
@@ -149,6 +204,7 @@ func SubmitBatchAnswersWithSession(sessionID uint, answers []BatchAnswerItem) ([
 			UserInput:     a.UserInput,
 			IsCorrect:     isCorrect,
 			Duration:      a.Duration,
+			UserID:        userID,
 		})
 
 		if isCorrect {
@@ -167,22 +223,31 @@ func SubmitBatchAnswersWithSession(sessionID uint, answers []BatchAnswerItem) ([
 		_ = repository.FinishSession(sessionID, correctCount, totalDuration)
 	}
 
+	// 6. 清除统计缓存（清除所有相关模块的缓存）
+	seen := make(map[uint]bool)
+	for _, q := range questionMap {
+		if !seen[q.ModuleID] {
+			seen[q.ModuleID] = true
+			InvalidateStatsCache(q.ModuleID, userID)
+		}
+	}
+
 	return results, nil
 }
 
-// GetSession 获取考试场次详情
-func GetSession(id uint) (*model.ExamSession, error) {
-	return repository.GetSessionByID(id)
+// GetSession 获取考试场次详情（校验用户归属）
+func GetSession(id uint, userID uint) (*model.ExamSession, error) {
+	return repository.GetSessionByID(id, userID)
 }
 
 // GetSessions 获取考试场次列表
-func GetSessions(page, size int) ([]model.ExamSession, int64, error) {
-	return repository.GetSessions(page, size)
+func GetSessions(page, size int, userID uint) ([]model.ExamSession, int64, error) {
+	return repository.GetSessions(page, size, userID)
 }
 
-// GetSessionAnswers 获取某个场次的答题记录
-func GetSessionAnswers(sessionID uint) ([]model.UserAnswer, error) {
-	return repository.GetSessionAnswers(sessionID)
+// GetSessionAnswers 获取某个场次的答题记录（校验用户归属）
+func GetSessionAnswers(sessionID uint, userID uint) ([]model.UserAnswer, error) {
+	return repository.GetSessionAnswers(sessionID, userID)
 }
 
 

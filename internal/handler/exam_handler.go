@@ -33,7 +33,8 @@ func GetExamModules(c *gin.Context) {
 		return
 	}
 
-	modules, err := service.GetModulesByExamID(uint(id))
+	userID, _ := c.Get("user_id")
+	modules, err := service.GetModulesByExamID(uint(id), userID.(uint))
 	if err != nil {
 		log.Printf("GetExamModules error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
