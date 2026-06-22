@@ -12,6 +12,14 @@
           导入 JSON
           <input type="file" accept=".json" @change="handleImport" hidden />
         </label>
+        <button class="btn btn-ghost" @click="downloadTemplate">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          下载模板
+        </button>
+        <button v-if="selectedIds.size > 0" class="btn btn-danger" @click="batchDelete">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          删除选中（{{ selectedIds.size }}）
+        </button>
       </div>
     </div>
 
@@ -43,6 +51,9 @@
       <table class="data-table">
         <thead>
           <tr>
+            <th style="width: 40px">
+              <input type="checkbox" class="row-checkbox" :checked="allSelected" @change="toggleSelectAll" />
+            </th>
             <th style="width: 56px">ID</th>
             <th style="width: 72px">题型</th>
             <th>题干</th>
@@ -52,7 +63,10 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(q, idx) in questions" :key="q.id" :class="{ 'row-alt': idx % 2 === 1 }">
+          <tr v-for="(q, idx) in questions" :key="q.id" :class="{ 'row-alt': idx % 2 === 1, 'row-selected': selectedIds.has(q.id) }">
+            <td>
+              <input type="checkbox" class="row-checkbox" :checked="selectedIds.has(q.id)" @change="toggleSelect(q.id)" />
+            </td>
             <td class="cell-id">{{ q.id }}</td>
             <td>
               <span class="type-badge">{{ getTypeLabel(q.type) }}</span>
@@ -74,7 +88,7 @@
             </td>
           </tr>
           <tr v-if="questions.length === 0 && !loading">
-            <td colspan="6" class="empty-row">暂无题目</td>
+            <td colspan="7" class="empty-row">暂无题目</td>
           </tr>
         </tbody>
       </table>
@@ -190,6 +204,7 @@ const saving = ref(false)
 const filter = ref({ moduleId: '', type: '', difficulty: '' })
 const showAddModal = ref(false)
 const editingQuestion = ref(null)
+const selectedIds = ref(new Set())
 
 const form = ref({
   moduleId: '', type: 'single', content: '', options: '', answer: '',
@@ -197,6 +212,46 @@ const form = ref({
 })
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize))
+
+const allSelected = computed(() => {
+  return questions.value.length > 0 && questions.value.every(q => selectedIds.value.has(q.id))
+})
+
+function toggleSelect(id) {
+  const set = new Set(selectedIds.value)
+  if (set.has(id)) { set.delete(id) } else { set.add(id) }
+  selectedIds.value = set
+}
+
+function toggleSelectAll() {
+  if (allSelected.value) {
+    selectedIds.value = new Set()
+  } else {
+    selectedIds.value = new Set(questions.value.map(q => q.id))
+  }
+}
+
+function clearSelection() {
+  selectedIds.value = new Set()
+}
+
+async function batchDelete() {
+  const ids = [...selectedIds.value]
+  if (ids.length === 0) return
+  if (!confirm(`确定要删除选中的 ${ids.length} 道题目吗？`)) return
+  let success = 0, fail = 0
+  for (const id of ids) {
+    try {
+      await deleteQuestion(id)
+      success++
+    } catch { fail++ }
+  }
+  clearSelection()
+  await loadQuestions()
+  if (fail > 0) {
+    alert(`删除完成：成功 ${success} 道，失败 ${fail} 道`)
+  }
+}
 
 watch(() => examStore.state.currentExamId, async () => {
   filter.value.moduleId = ''
@@ -217,6 +272,7 @@ async function loadModules() {
 
 async function loadQuestions() {
   loading.value = true
+  clearSelection()
   try {
     const params = { page: currentPage.value, size: pageSize }
     if (filter.value.moduleId) {
@@ -277,6 +333,54 @@ async function confirmDelete(q) {
   if (!confirm(`确定要删除第 ${q.id} 题吗？`)) return
   try { await deleteQuestion(q.id); await loadQuestions() }
   catch (err) { alert('删除失败') }
+}
+
+const TEMPLATE_DATA = [
+  {
+    "module_id": "请查看考试管理页面的模块ID，填入数字",
+    "type": "single",
+    "content": "我国的根本政治制度是？",
+    "options": "[\"A. 人民代表大会制度\",\"B. 中国共产党领导的多党合作制\",\"C. 民族区域自治制度\",\"D. 基层群众自治制度\"]",
+    "answer": "A",
+    "analysis": "人民代表大会制度是我国的根本政治制度。",
+    "difficulty": 1,
+    "tags": "政治,宪法",
+    "source": "示例"
+  },
+  {
+    "module_id": "请查看考试管理页面的模块ID，填入数字",
+    "type": "multi",
+    "content": "下列属于我国国家机构的有哪些？（多选）",
+    "options": "[\"A. 全国人民代表大会\",\"B. 国务院\",\"C. 人民法院\",\"D. 人民检察院\"]",
+    "answer": "A,B,C,D",
+    "analysis": "以上四项均属于我国国家机构。",
+    "difficulty": 2,
+    "tags": "政治,宪法",
+    "source": "示例"
+  },
+  {
+    "module_id": "请查看考试管理页面的模块ID，填入数字",
+    "type": "judge",
+    "content": "我国一切权力属于人民。",
+    "options": "[\"A. 正确\",\"B. 错误\"]",
+    "answer": "A",
+    "analysis": "《宪法》规定中华人民共和国的一切权力属于人民。",
+    "difficulty": 1,
+    "tags": "政治,宪法",
+    "source": "示例"
+  }
+]
+
+function downloadTemplate() {
+  const blob = new Blob([JSON.stringify(TEMPLATE_DATA, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = '题目导入模板.json'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 async function handleImport(event) {
@@ -368,6 +472,25 @@ h1 {
 .btn-ghost:hover { background: var(--bg-hover); border-color: var(--text-muted); }
 
 .import-btn { cursor: pointer; }
+
+.btn-danger {
+  background: var(--error);
+  color: white;
+  border: none;
+}
+
+.btn-danger:hover { background: #dc2626; }
+
+.row-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.row-selected {
+  background: #eff6ff !important;
+}
 
 .filter-bar {
   display: flex;
