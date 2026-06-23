@@ -85,6 +85,29 @@ func BatchCreateQuestions(questions []model.Question) error {
 	return database.DB.CreateInBatches(questions, 100).Error
 }
 
+// BatchDeleteQuestions 批量删除题目及其答题记录
+func BatchDeleteQuestions(ids []uint) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		// Delete related user answers first
+		if err := tx.Where("question_id IN ?", ids).Delete(&model.UserAnswer{}).Error; err != nil {
+			return err
+		}
+		// Delete questions
+		result := tx.Where("id IN ?", ids).Delete(&model.Question{})
+		if result.Error != nil {
+			return result.Error
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return len(ids), nil
+}
+
 // UpdateQuestion 更新题目（不覆盖 CreatedAt）
 func UpdateQuestion(question *model.Question) error {
 	return database.DB.Model(&model.Question{}).Where("id = ?", question.ID).Updates(map[string]interface{}{
@@ -165,7 +188,7 @@ func CountUnansweredByModule(moduleID uint) (int64, error) {
 }
 
 // GetWrongQuestions 获取错题（取每题最后一次答题记录为错误的）
-func GetWrongQuestions(moduleID uint, count int) ([]model.Question, error) {
+func GetWrongQuestions(moduleID uint, count int, userID uint) ([]model.Question, error) {
 	var questions []model.Question
 	err := database.DB.Model(&model.Question{}).
 		Joins(`INNER JOIN (
@@ -173,10 +196,11 @@ func GetWrongQuestions(moduleID uint, count int) ([]model.Question, error) {
 			INNER JOIN (
 				SELECT question_id, MAX(id) AS max_id
 				FROM user_answers
+				WHERE user_id = ?
 				GROUP BY question_id
 			) latest ON ua.id = latest.max_id
-			WHERE ua.is_correct = false
-		) wrong ON wrong.question_id = questions.id`).
+			WHERE ua.is_correct = false AND ua.user_id = ?
+		) wrong ON wrong.question_id = questions.id`, userID, userID).
 		Where("questions.module_id = ?", moduleID).
 		Order("RANDOM()").Limit(count).
 		Find(&questions).Error
@@ -233,7 +257,7 @@ func GetFilteredUnansweredQuestions(filter QuizFilter, count int) ([]model.Quest
 }
 
 // GetFilteredWrongQuestions 按难度/标签筛选错题（取每题最后一次答题记录为错误的）
-func GetFilteredWrongQuestions(filter QuizFilter, count int) ([]model.Question, error) {
+func GetFilteredWrongQuestions(filter QuizFilter, count int, userID uint) ([]model.Question, error) {
 	var questions []model.Question
 	query := database.DB.Model(&model.Question{}).
 		Joins(`INNER JOIN (
@@ -241,10 +265,11 @@ func GetFilteredWrongQuestions(filter QuizFilter, count int) ([]model.Question, 
 			INNER JOIN (
 				SELECT question_id, MAX(id) AS max_id
 				FROM user_answers
+				WHERE user_id = ?
 				GROUP BY question_id
 			) latest ON ua.id = latest.max_id
-			WHERE ua.is_correct = false
-		) wrong ON wrong.question_id = questions.id`).
+			WHERE ua.is_correct = false AND ua.user_id = ?
+		) wrong ON wrong.question_id = questions.id`, userID, userID).
 		Where("questions.module_id = ?", filter.ModuleID)
 
 	if filter.Difficulty > 0 {

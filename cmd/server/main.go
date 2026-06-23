@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -52,11 +54,12 @@ func main() {
 		setupStaticFiles(r, distFS)
 	}
 
-	// 端口配置
+	// 端口配置（被占用时自动尝试下一个端口）
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
+	port = findAvailablePort(port)
 
 	// Graceful shutdown
 	srv := &http.Server{
@@ -82,6 +85,28 @@ func main() {
 		log.Fatalf("server forced to shutdown: %v", err)
 	}
 	fmt.Println("Server exited gracefully")
+}
+
+// findAvailablePort 从指定端口开始查找可用端口，最多尝试 20 个
+func findAvailablePort(startPort string) string {
+	port, err := strconv.Atoi(startPort)
+	if err != nil {
+		port = 8080
+	}
+	for i := 0; i < 20; i++ {
+		p := port + i
+		addr := fmt.Sprintf(":%d", p)
+		ln, err := net.Listen("tcp", addr)
+		if err == nil {
+			ln.Close()
+			if i > 0 {
+				fmt.Printf("Port %d is in use, using port %d instead\n", port, p)
+			}
+			return strconv.Itoa(p)
+		}
+	}
+	log.Fatalf("No available port found in range %d-%d", port, port+19)
+	return ""
 }
 
 // setupStaticFiles 配置静态文件服务（SPA 模式）

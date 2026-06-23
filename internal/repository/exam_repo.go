@@ -48,15 +48,6 @@ func ListAllModules() ([]model.Module, error) {
 	return modules, err
 }
 
-// GetModulesByExamID 获取某考试类型下的所有模块
-func GetModulesByExamID(examTypeID uint) ([]model.Module, error) {
-	var modules []model.Module
-	err := database.DB.Where("exam_type_id = ?", examTypeID).
-		Order("sort ASC").
-		Find(&modules).Error
-	return modules, err
-}
-
 // GetModule 获取单个模块
 func GetModule(id uint) (*model.Module, error) {
 	var module model.Module
@@ -156,4 +147,43 @@ func GetModulesByExamIDWithStats(examTypeID uint, userID uint) ([]model.ModuleWi
 		ORDER BY m.sort ASC
 	`, userID, examTypeID).Scan(&results).Error
 	return results, err
+}
+
+// ExamModuleStatsRow is a single row from the aggregated stats query.
+type ExamModuleStatsRow struct {
+	ID             uint
+	Name           string
+	TotalQuestions int64
+	TotalAnswered  int64
+	CorrectCount   int64
+}
+
+// GetExamStatsAggregated returns per-module stats for an exam type in one query.
+func GetExamStatsAggregated(examTypeID uint, userID uint) ([]ExamModuleStatsRow, error) {
+	var rows []ExamModuleStatsRow
+	err := database.DB.Raw(`
+		SELECT
+			m.id,
+			m.name,
+			COALESCE((SELECT COUNT(*) FROM questions q WHERE q.module_id = m.id), 0) AS total_questions,
+			COALESCE(stats.total_answered, 0) AS total_answered,
+			COALESCE(stats.correct_count, 0) AS correct_count
+		FROM modules m
+		LEFT JOIN (
+			SELECT
+				q.module_id,
+				COUNT(*) AS total_answered,
+				SUM(CASE WHEN ua.is_correct THEN 1 ELSE 0 END) AS correct_count
+			FROM user_answers ua
+			INNER JOIN questions q ON q.id = ua.question_id
+			WHERE ua.user_id = ?
+			  AND ua.id IN (
+			      SELECT MAX(id) FROM user_answers WHERE user_id = ? GROUP BY question_id
+			  )
+			GROUP BY q.module_id
+		) stats ON stats.module_id = m.id
+		WHERE m.exam_type_id = ?
+		ORDER BY m.sort ASC
+	`, userID, userID, examTypeID).Scan(&rows).Error
+	return rows, err
 }

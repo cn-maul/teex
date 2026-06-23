@@ -13,9 +13,9 @@ func SaveAnswer(answer *model.UserAnswer) error {
 }
 
 // GetAnswerHistory 获取某题的答题历史
-func GetAnswerHistory(questionID uint) ([]model.UserAnswer, error) {
+func GetAnswerHistory(questionID uint, userID uint) ([]model.UserAnswer, error) {
 	var answers []model.UserAnswer
-	err := database.DB.Where("question_id = ?", questionID).
+	err := database.DB.Where("question_id = ? AND user_id = ?", questionID, userID).
 		Order("created_at DESC").
 		Find(&answers).Error
 	return answers, err
@@ -32,94 +32,93 @@ type StatsResult struct {
 
 // GetModuleStats 获取某模块的统计（正确率取每题最后一次答题记录）
 func GetModuleStats(moduleID uint, userID uint) (*StatsResult, error) {
-	// 题目总数
-	var totalQuestions int64
-	err := database.DB.Model(&model.Question{}).
-		Where("module_id = ?", moduleID).
-		Count(&totalQuestions).Error
-	if err != nil {
-		return nil, err
-	}
-
-	// 已做题数和正确数：合并为一条查询
 	type statsRow struct {
-		TotalAnswered int64
-		CorrectCount  int64
+		TotalQuestions int64
+		TotalAnswered  int64
+		CorrectCount   int64
 	}
 	var row statsRow
-	err = database.DB.Raw(`
+	err := database.DB.Raw(`
 		SELECT
-			COUNT(*) AS total_answered,
-			SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) AS correct_count
-		FROM user_answers
-		WHERE id IN (
-			SELECT MAX(id) FROM user_answers
-			WHERE question_id IN (SELECT id FROM questions WHERE module_id = ?) AND user_id = ?
-			GROUP BY question_id
-		)
-	`, moduleID, userID).Scan(&row).Error
+			COALESCE((SELECT COUNT(*) FROM questions WHERE module_id = ?), 0) AS total_questions,
+			COALESCE(stats.total_answered, 0) AS total_answered,
+			COALESCE(stats.correct_count, 0) AS correct_count
+		FROM (
+			SELECT 1
+		) dummy
+		LEFT JOIN (
+			SELECT
+				COUNT(*) AS total_answered,
+				SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) AS correct_count
+			FROM user_answers
+			WHERE id IN (
+				SELECT MAX(id) FROM user_answers
+				WHERE question_id IN (SELECT id FROM questions WHERE module_id = ?) AND user_id = ?
+				GROUP BY question_id
+			)
+		) stats ON 1=1
+	`, moduleID, moduleID, userID).Scan(&row).Error
 	if err != nil {
 		return nil, err
 	}
-	totalAnswered := row.TotalAnswered
-	correctCount := row.CorrectCount
 
 	var accuracy float64
-	if totalAnswered > 0 {
-		accuracy = float64(correctCount) / float64(totalAnswered) * 100
+	if row.TotalAnswered > 0 {
+		accuracy = float64(row.CorrectCount) / float64(row.TotalAnswered) * 100
 	}
 
 	return &StatsResult{
-		TotalAnswered: totalAnswered,
-		CorrectCount:  correctCount,
-		Accuracy:      accuracy,
-		TotalQuestions: totalQuestions,
-		Unanswered:    totalQuestions - totalAnswered,
+		TotalAnswered:  row.TotalAnswered,
+		CorrectCount:   row.CorrectCount,
+		Accuracy:       accuracy,
+		TotalQuestions:  row.TotalQuestions,
+		Unanswered:     row.TotalQuestions - row.TotalAnswered,
 	}, nil
 }
 
 // GetOverallStats 获取全局统计（正确率取每题最后一次答题记录）
 func GetOverallStats(userID uint) (*StatsResult, error) {
-	var totalQuestions int64
-	err := database.DB.Model(&model.Question{}).Count(&totalQuestions).Error
-	if err != nil {
-		return nil, err
-	}
-
-	// 已做题数和正确数：合并为一条查询
 	type statsRow struct {
-		TotalAnswered int64
-		CorrectCount  int64
+		TotalQuestions int64
+		TotalAnswered  int64
+		CorrectCount   int64
 	}
 	var row statsRow
-	err = database.DB.Raw(`
+	err := database.DB.Raw(`
 		SELECT
-			COUNT(*) AS total_answered,
-			SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) AS correct_count
-		FROM user_answers
-		WHERE id IN (
-			SELECT MAX(id) FROM user_answers
-			WHERE user_id = ?
-			GROUP BY question_id
-		)
+			COALESCE((SELECT COUNT(*) FROM questions), 0) AS total_questions,
+			COALESCE(stats.total_answered, 0) AS total_answered,
+			COALESCE(stats.correct_count, 0) AS correct_count
+		FROM (
+			SELECT 1
+		) dummy
+		LEFT JOIN (
+			SELECT
+				COUNT(*) AS total_answered,
+				SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) AS correct_count
+			FROM user_answers
+			WHERE id IN (
+				SELECT MAX(id) FROM user_answers
+				WHERE user_id = ?
+				GROUP BY question_id
+			)
+		) stats ON 1=1
 	`, userID).Scan(&row).Error
 	if err != nil {
 		return nil, err
 	}
-	totalAnswered := row.TotalAnswered
-	correctCount := row.CorrectCount
 
 	var accuracy float64
-	if totalAnswered > 0 {
-		accuracy = float64(correctCount) / float64(totalAnswered) * 100
+	if row.TotalAnswered > 0 {
+		accuracy = float64(row.CorrectCount) / float64(row.TotalAnswered) * 100
 	}
 
 	return &StatsResult{
-		TotalAnswered: totalAnswered,
-		CorrectCount:  correctCount,
-		Accuracy:      accuracy,
-		TotalQuestions: totalQuestions,
-		Unanswered:    totalQuestions - totalAnswered,
+		TotalAnswered:  row.TotalAnswered,
+		CorrectCount:   row.CorrectCount,
+		Accuracy:       accuracy,
+		TotalQuestions:  row.TotalQuestions,
+		Unanswered:     row.TotalQuestions - row.TotalAnswered,
 	}, nil
 }
 
@@ -200,3 +199,4 @@ func CountAffectedByExamType(examTypeID uint) (modules int64, questions int64, a
 	}
 	return modules, questions, answers, nil
 }
+

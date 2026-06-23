@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"log"
+	"os"
 
 	"exam-quiz/internal/model"
 	"exam-quiz/internal/util"
@@ -50,7 +51,15 @@ func ensureAdmin() {
 	var count int64
 	DB.Model(&model.User{}).Count(&count)
 	if count == 0 {
-		hashedPassword, err := util.HashPassword("admin123")
+		adminPassword := os.Getenv("ADMIN_PASSWORD")
+		if adminPassword == "" {
+			adminPassword = "admin123"
+			fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+			fmt.Println("!! WARNING: Using default admin password.                   !!")
+			fmt.Println("!! Set ADMIN_PASSWORD env var for production.               !!")
+			fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+		}
+		hashedPassword, err := util.HashPassword(adminPassword)
 		if err != nil {
 			log.Printf("warning: failed to hash admin password: %v", err)
 			return
@@ -64,7 +73,7 @@ func ensureAdmin() {
 		if err := DB.Create(&admin).Error; err != nil {
 			log.Printf("warning: failed to create admin user: %v", err)
 		} else {
-			fmt.Println("Default admin user created (admin/admin123)")
+			fmt.Println("Default admin user created.")
 		}
 	}
 }

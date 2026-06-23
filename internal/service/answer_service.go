@@ -2,9 +2,11 @@ package service
 
 import (
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 
+	"exam-quiz/internal/cache"
 	"exam-quiz/internal/model"
 	"exam-quiz/internal/repository"
 )
@@ -41,8 +43,28 @@ func SubmitAnswer(questionID uint, userInput string, duration int, sessionID uin
 		return nil, fmt.Errorf("failed to save answer: %w", err)
 	}
 
+	// Auto-finish the session when all questions have been answered.
+	// Optimized: count first (lightweight), only fetch full session on last answer.
+	if sessionID > 0 {
+		if answerCount, countErr := repository.CountSessionAnswers(sessionID); countErr == nil {
+			if session, sessErr := repository.GetSessionByID(sessionID, userID); sessErr == nil && session.TotalCount > 0 && answerCount >= int64(session.TotalCount) {
+				if answers, aErr := repository.GetSessionAnswersRaw(sessionID); aErr == nil {
+					correctCount := 0
+					totalDuration := 0
+					for _, a := range answers {
+						if a.IsCorrect {
+							correctCount++
+						}
+						totalDuration += a.Duration
+					}
+					_ = repository.FinishSession(sessionID, correctCount, totalDuration, userID)
+				}
+			}
+		}
+	}
+
 	// 4. 清除统计缓存
-	InvalidateStatsCache(question.ModuleID, userID)
+	cache.InvalidateModuleStats(question.ModuleID, userID)
 
 	// 5. 返回结果
 	return &AnswerResult{
@@ -145,7 +167,7 @@ func SubmitBatchAnswers(answers []BatchAnswerItem, userID uint) ([]AnswerResult,
 	for _, q := range questionMap {
 		if !seen[q.ModuleID] {
 			seen[q.ModuleID] = true
-			InvalidateStatsCache(q.ModuleID, userID)
+			cache.InvalidateModuleStats(q.ModuleID, userID)
 		}
 	}
 
@@ -164,6 +186,13 @@ func SubmitBatchAnswersWithSession(sessionID uint, answers []BatchAnswerItem, us
 	if len(answers) == 0 {
 		return nil, nil
 	}
+
+	// Verify session belongs to the user
+	session, err := repository.GetSessionByID(sessionID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("session not found or access denied: %w", err)
+	}
+	_ = session // session verified
 
 	// 1. 收集所有 question_id
 	ids := make([]uint, len(answers))
@@ -220,7 +249,9 @@ func SubmitBatchAnswersWithSession(sessionID uint, answers []BatchAnswerItem, us
 
 	// 5. 结束考试场次
 	if sessionID > 0 {
-		_ = repository.FinishSession(sessionID, correctCount, totalDuration)
+		if err := repository.FinishSession(sessionID, correctCount, totalDuration, userID); err != nil {
+			log.Printf("WARNING: failed to finish session %d: %v", sessionID, err)
+		}
 	}
 
 	// 6. 清除统计缓存（清除所有相关模块的缓存）
@@ -228,7 +259,7 @@ func SubmitBatchAnswersWithSession(sessionID uint, answers []BatchAnswerItem, us
 	for _, q := range questionMap {
 		if !seen[q.ModuleID] {
 			seen[q.ModuleID] = true
-			InvalidateStatsCache(q.ModuleID, userID)
+			cache.InvalidateModuleStats(q.ModuleID, userID)
 		}
 	}
 
@@ -245,9 +276,12 @@ func GetSessions(page, size int, userID uint) ([]model.ExamSession, int64, error
 	return repository.GetSessions(page, size, userID)
 }
 
-// GetSessionAnswers 获取某个场次的答题记录（校验用户归属）
+// GetSessionAnswers returns all answers for a session (with user ownership check).
 func GetSessionAnswers(sessionID uint, userID uint) ([]model.UserAnswer, error) {
 	return repository.GetSessionAnswers(sessionID, userID)
 }
 
-
+// GetSessionAnswersPaginated returns paginated answers for a session (with user ownership check).
+func GetSessionAnswersPaginated(sessionID uint, page, size int, userID uint) ([]model.UserAnswer, int64, error) {
+	return repository.GetSessionAnswersPaginated(sessionID, page, size, userID)
+}

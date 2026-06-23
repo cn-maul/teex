@@ -14,8 +14,8 @@ func CreateSession(session *model.ExamSession) error {
 }
 
 // FinishSession 完成考试场次
-func FinishSession(sessionID uint, correctCount int, duration int) error {
-	return database.DB.Model(&model.ExamSession{}).Where("id = ?", sessionID).Updates(map[string]interface{}{
+func FinishSession(sessionID uint, correctCount int, duration int, userID uint) error {
+	return database.DB.Model(&model.ExamSession{}).Where("id = ? AND user_id = ?", sessionID, userID).Updates(map[string]interface{}{
 		"correct_count": correctCount,
 		"duration":      duration,
 		"finished_at":   time.Now(),
@@ -68,6 +68,21 @@ func GetSessionAnswers(sessionID uint, userID uint) ([]model.UserAnswer, error) 
 		Where("exam_session_id = ?", sessionID).
 		Order("created_at ASC").
 		Find(&answers).Error
+	return answers, err
+}
+
+// CountSessionAnswers returns the number of answers recorded for a session.
+func CountSessionAnswers(sessionID uint) (int64, error) {
+	var count int64
+	err := database.DB.Model(&model.UserAnswer{}).Where("exam_session_id = ?", sessionID).Count(&count).Error
+	return count, err
+}
+
+// GetSessionAnswersRaw returns all answers for a session without preloading
+// the Question relation (lighter than GetSessionAnswers; used for stats).
+func GetSessionAnswersRaw(sessionID uint) ([]model.UserAnswer, error) {
+	var answers []model.UserAnswer
+	err := database.DB.Where("exam_session_id = ?", sessionID).Find(&answers).Error
 	return answers, err
 }
 

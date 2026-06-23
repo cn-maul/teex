@@ -9,6 +9,7 @@ const routes = [
   { path: '/settings',  name: 'Settings',  component: () => import('../views/SettingsView.vue') },
   { path: '/admin/exams', name: 'ExamManage', component: () => import('../views/ExamManageView.vue'), meta: { admin: true } },
   { path: '/admin/questions', name: 'QuestionManage', component: () => import('../views/QuestionManageView.vue'), meta: { admin: true } },
+  { path: '/admin/users', name: 'UserManage', component: () => import('../views/UserManageView.vue'), meta: { admin: true } },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

@@ -156,6 +156,7 @@ import {
   getExamTypes, getExamModules,
   createExamType, updateExamType, deleteExamType,
   createModule, updateModule, deleteModule,
+  showToast,
 } from '../api'
 import { useExamStore } from '../stores/exam'
 
@@ -224,7 +225,7 @@ function closeExamModal() {
 
 async function saveExam() {
   if (!examForm.value.name.trim()) {
-    alert('请填写考试名称'); return
+    showToast('请填写考试名称', 'error'); return
   }
   saving.value = true
   try {
@@ -238,7 +239,7 @@ async function saveExam() {
     await loadExams()
     await examStore.refreshExams()
   } catch (err) {
-    alert('保存失败：' + (err.response?.data?.error || err.message))
+    showToast('保存失败：' + (err.response?.data?.error || err.message), 'error')
   } finally {
     saving.value = false
   }
@@ -253,7 +254,7 @@ async function confirmDeleteExam(exam) {
     await loadExams()
     await examStore.refreshExams()
   } catch (err) {
-    alert('删除失败：' + (err.response?.data?.error || err.message))
+    showToast('删除失败：' + (err.response?.data?.error || err.message), 'error')
   }
 }
 
@@ -274,7 +275,7 @@ function closeModuleModal() {
 
 async function saveModule() {
   if (!moduleForm.value.name.trim()) {
-    alert('请填写科目名称'); return
+    showToast('请填写科目名称', 'error'); return
   }
   saving.value = true
   try {
@@ -293,7 +294,7 @@ async function saveModule() {
     await loadExams()
     await examStore.refreshExams()
   } catch (err) {
-    alert('保存失败：' + (err.response?.data?.error || err.message))
+    showToast('保存失败：' + (err.response?.data?.error || err.message), 'error')
   } finally {
     saving.value = false
   }
@@ -307,7 +308,7 @@ async function confirmDeleteModule(mod) {
     await loadExams()
     await examStore.refreshExams()
   } catch (err) {
-    alert('删除失败：' + (err.response?.data?.error || err.message))
+    showToast('删除失败：' + (err.response?.data?.error || err.message), 'error')
   }
 }
 </script>

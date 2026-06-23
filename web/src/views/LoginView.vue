@@ -29,9 +29,6 @@
         <p class="error-msg" v-if="error">{{ error }}</p>
       </form>
 
-      <p class="hint" v-if="mode === 'login'">
-        默认管理员：admin / admin123
-      </p>
     </div>
   </div>
 </template>
@@ -167,11 +164,5 @@ async function handleSubmit() {
   font-size: 13px;
   text-align: center;
   margin-top: 12px;
-}
-.hint {
-  text-align: center;
-  color: #aaa;
-  font-size: 12px;
-  margin-top: 16px;
 }
 </style>

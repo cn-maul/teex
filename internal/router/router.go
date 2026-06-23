@@ -1,6 +1,10 @@
 package router
 
 import (
+	"net/http"
+	"os"
+	"strings"
+
 	"exam-quiz/internal/handler"
 	"exam-quiz/internal/middleware"
 
@@ -8,27 +12,44 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Setup 初始化路由
+// Setup initializes the router and all routes.
 func Setup() *gin.Engine {
 	r := gin.Default()
 
-	// 限制请求体大小（8MB）
+	// Limit request body size (8MB)
 	r.MaxMultipartMemory = 8 << 20
 
-	// CORS 配置
-	r.Use(cors.New(cors.Config{
-		AllowOriginFunc: func(origin string) bool {
-			return true
-		},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
-		AllowCredentials: true,
-	}))
+	// CORS configuration
+	corsOrigins := os.Getenv("CORS_ORIGINS")
+	corsConfig := cors.Config{
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"Origin", "Content-Type", "Accept", "Authorization"},
+	}
+	if corsOrigins != "" {
+		// Specific origins configured: allow credentials
+		corsConfig.AllowAllOrigins = false
+		corsConfig.AllowOrigins = strings.Split(corsOrigins, ",")
+		corsConfig.AllowCredentials = true
+	} else {
+		// No origins configured: allow all without credentials (CORS spec forbids * with credentials)
+		corsConfig.AllowAllOrigins = true
+		corsConfig.AllowCredentials = false
+	}
+	r.Use(cors.New(corsConfig))
+
+	// Limit non-multipart request body size (2MB)
+	const maxBodySize int64 = 2 << 20
+	r.Use(func(c *gin.Context) {
+		if c.Request.Body != nil && !strings.HasPrefix(c.ContentType(), "multipart/") {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBodySize)
+		}
+		c.Next()
+	})
 
 	// 健康检查
 	r.GET("/api/health", handler.HealthCheck)
 
-	// 公开路由（无需认证）
+	// 认证 (公开路由)
 	auth := r.Group("/api/auth")
 	{
 		auth.POST("/register", handler.Register)
@@ -41,26 +62,39 @@ func Setup() *gin.Engine {
 	{
 		// 用户信息
 		api.GET("/profile", handler.GetProfile)
+		api.PUT("/profile", handler.UpdateProfile)
+		api.PUT("/profile/password", handler.ChangePassword)
 
-		// 考试类型 CRUD
-		api.GET("/exams", handler.GetExamTypes)
-		api.POST("/exams", handler.CreateExamType)
-		api.PUT("/exams/:id", handler.UpdateExamType)
-		api.DELETE("/exams/:id", handler.DeleteExamType)
-		api.GET("/exams/:id/modules", handler.GetExamModules)
+		// 考试
+		exams := api.Group("/exams")
+		{
+			exams.GET("", handler.GetExamTypes)
+			exams.POST("", handler.CreateExamType)
+			exams.PUT("/:id", handler.UpdateExamType)
+			exams.DELETE("/:id", handler.DeleteExamType)
+			exams.GET("/:id/modules", handler.GetExamModules)
+			exams.GET("/:id/stats", handler.GetExamStats) // NEW
+		}
 
-		// 模块 CRUD
-		api.POST("/modules", handler.CreateModule)
-		api.PUT("/modules/:id", handler.UpdateModule)
-		api.DELETE("/modules/:id", handler.DeleteModule)
+		// 模块
+		modules := api.Group("/modules")
+		{
+			modules.POST("", handler.CreateModule)
+			modules.PUT("/:id", handler.UpdateModule)
+			modules.DELETE("/:id", handler.DeleteModule)
+		}
 
 		// 题目管理
-		api.GET("/questions", handler.ListQuestions)
-		api.GET("/questions/:id", handler.GetQuestion)
-		api.POST("/questions", handler.CreateQuestion)
-		api.PUT("/questions/:id", handler.UpdateQuestion)
-		api.DELETE("/questions/:id", handler.DeleteQuestion)
-		api.POST("/questions/import", handler.ImportQuestions)
+		questions := api.Group("/questions")
+		{
+			questions.GET("", handler.ListQuestions)
+			questions.GET("/:id", handler.GetQuestion)
+			questions.POST("", handler.CreateQuestion)
+			questions.PUT("/:id", handler.UpdateQuestion)
+			questions.DELETE("/:id", handler.DeleteQuestion)
+			questions.POST("/import", handler.ImportQuestions)
+			questions.DELETE("/batch", handler.BatchDeleteQuestions)
+		}
 
 		// 刷题
 		api.POST("/quiz/start", handler.StartQuiz)
@@ -72,9 +106,12 @@ func Setup() *gin.Engine {
 		api.GET("/stats/module/:id", handler.GetModuleStats)
 
 		// 考试场次
-		api.GET("/sessions", handler.GetSessions)
-		api.GET("/sessions/:id", handler.GetSession)
-		api.GET("/sessions/:id/answers", handler.GetSessionAnswers)
+		sessions := api.Group("/sessions")
+		{
+			sessions.GET("", handler.GetSessions)
+			sessions.GET("/:id", handler.GetSession)
+			sessions.GET("/:id/answers", handler.GetSessionAnswers)
+		}
 
 		// 数据管理
 		api.DELETE("/records", handler.ClearAllRecords)

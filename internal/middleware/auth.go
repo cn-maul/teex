@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"exam-quiz/internal/repository"
 	"exam-quiz/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -45,12 +46,41 @@ func AuthRequired() gin.HandlerFunc {
 // AdminRequired 管理员权限中间件（需在 AuthRequired 之后使用）
 func AdminRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, exists := c.Get("role")
-		if !exists || role.(string) != "admin" {
+		roleRaw, exists := c.Get("role")
+		if !exists {
 			c.JSON(http.StatusForbidden, gin.H{"error": "需要管理员权限"})
 			c.Abort()
 			return
 		}
+		role, ok := roleRaw.(string)
+		if !ok || role != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "需要管理员权限"})
+			c.Abort()
+			return
+		}
+
+		// Fast-path passed. Now verify against the database in case the
+		// user's role was changed (or the account deleted) after the JWT
+		// was issued.
+		userIDRaw, exists := c.Get("user_id")
+		if !exists {
+			c.JSON(http.StatusForbidden, gin.H{"error": "需要管理员权限"})
+			c.Abort()
+			return
+		}
+		userID, ok := userIDRaw.(uint)
+		if !ok {
+			c.JSON(http.StatusForbidden, gin.H{"error": "需要管理员权限"})
+			c.Abort()
+			return
+		}
+		user, err := repository.GetUserByID(userID)
+		if err != nil || user.Role != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "需要管理员权限"})
+			c.Abort()
+			return
+		}
+
 		c.Next()
 	}
 }

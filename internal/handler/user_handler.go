@@ -2,14 +2,12 @@ package handler
 
 import (
 	"log"
-	"net/http"
+	"strings"
 
-	"exam-quiz/internal/model"
-	"exam-quiz/internal/repository"
-	"exam-quiz/internal/util"
+	"exam-quiz/internal/response"
+	"exam-quiz/internal/service"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // RegisterRequest 注册请求
@@ -29,123 +27,137 @@ type LoginRequest struct {
 func Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效"})
+		response.Error(c, 400, "请求参数无效")
 		return
 	}
 
-	if len(req.Username) < 3 || len(req.Username) > 50 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "用户名长度需在 3-50 之间"})
-		return
-	}
-	if len(req.Password) < 6 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "密码长度不能少于 6 位"})
-		return
-	}
-
-	// 检查用户名是否已存在
-	if existing, _ := repository.GetUserByUsername(req.Username); existing != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "用户名已存在"})
-		return
-	}
-
-	hashedPassword, err := util.HashPassword(req.Password)
+	result, err := service.Register(req.Username, req.Password, req.Nickname)
 	if err != nil {
-		log.Printf("Register hash error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
-		return
-	}
-
-	nickname := req.Nickname
-	if nickname == "" {
-		nickname = req.Username
-	}
-
-	user := &model.User{
-		Username: req.Username,
-		Password: hashedPassword,
-		Nickname: nickname,
-		Role:     "user",
-	}
-	if err := repository.CreateUser(user); err != nil {
 		log.Printf("Register error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "注册失败，请稍后重试"})
+		errMsg := err.Error()
+		safeErrors := []string{"用户名长度", "密码长度", "用户名已存在"}
+		safe := false
+		for _, se := range safeErrors {
+			if strings.Contains(errMsg, se) {
+				safe = true
+				break
+			}
+		}
+		if !safe {
+			errMsg = "操作失败，请稍后重试"
+		}
+		response.Error(c, 400, errMsg)
 		return
 	}
 
-	// 自动登录，返回 token
-	token, err := util.GenerateToken(user.ID, user.Username, user.Role)
-	if err != nil {
-		log.Printf("Register token error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "注册成功但自动登录失败"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{
-		"data": gin.H{
-			"token": token,
-			"user":  user,
-		},
-		"message": "注册成功",
-	})
+	response.OKWithMessage(c, gin.H{
+		"token": result.Token,
+		"user":  result.User,
+	}, "注册成功")
 }
 
 // Login 用户登录
 func Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效"})
+		response.Error(c, 400, "请求参数无效")
 		return
 	}
 
-	user, err := repository.GetUserByUsername(req.Username)
+	result, err := service.Login(req.Username, req.Password)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
-			return
-		}
 		log.Printf("Login error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败，请稍后重试"})
+		response.Error(c, 401, err.Error())
 		return
 	}
 
-	if !util.CheckPassword(req.Password, user.Password) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
-		return
-	}
-
-	token, err := util.GenerateToken(user.ID, user.Username, user.Role)
-	if err != nil {
-		log.Printf("Login token error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "登录失败，请稍后重试"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"token": token,
-			"user":  user,
-		},
+	response.OK(c, gin.H{
+		"token": result.Token,
+		"user":  result.User,
 	})
 }
 
 // GetProfile 获取当前用户信息
 func GetProfile(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	user, err := repository.GetUserByID(userID.(uint))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户信息失败"})
+	userIDRaw, exists := c.Get("user_id")
+	if !exists {
+		response.Error(c, 401, "未登录")
+		c.Abort()
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": user})
+	userID := userIDRaw.(uint)
+	user, err := service.GetProfile(userID)
+	if err != nil {
+		response.Error(c, 500, "获取用户信息失败")
+		return
+	}
+	response.OK(c, user)
 }
 
 // ListUsers 获取用户列表（管理员）
 func ListUsers(c *gin.Context) {
-	users, err := repository.ListUsers()
+	users, err := service.ListUsers()
 	if err != nil {
 		log.Printf("ListUsers error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败"})
+		response.Error(c, 500, "操作失败")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": users})
+	response.OK(c, users)
+}
+
+// UpdateProfileRequest 修改昵称请求
+type UpdateProfileRequest struct {
+	Nickname string `json:"nickname" binding:"required"`
+}
+
+// UpdateProfile 修改当前用户昵称
+func UpdateProfile(c *gin.Context) {
+	var req UpdateProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "请求参数无效")
+		return
+	}
+
+	userIDRaw, exists := c.Get("user_id")
+	if !exists {
+		response.Error(c, 401, "未登录")
+		c.Abort()
+		return
+	}
+	userID := userIDRaw.(uint)
+	if err := service.UpdateProfile(userID, req.Nickname); err != nil {
+		log.Printf("UpdateProfile error: %v", err)
+		response.Error(c, 400, err.Error())
+		return
+	}
+	response.OKWithMessage(c, nil, "昵称修改成功")
+}
+
+// ChangePasswordRequest 修改密码请求
+type ChangePasswordRequest struct {
+	OldPassword string `json:"old_password" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required"`
+}
+
+// ChangePassword 修改密码
+func ChangePassword(c *gin.Context) {
+	var req ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "请求参数无效")
+		return
+	}
+
+	userIDRaw, exists := c.Get("user_id")
+	if !exists {
+		response.Error(c, 401, "未登录")
+		c.Abort()
+		return
+	}
+	userID := userIDRaw.(uint)
+	if err := service.ChangePassword(userID, req.OldPassword, req.NewPassword); err != nil {
+		log.Printf("ChangePassword error: %v", err)
+		response.Error(c, 400, err.Error())
+		return
+	}
+	response.OKWithMessage(c, nil, "密码修改成功")
 }

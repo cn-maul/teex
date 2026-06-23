@@ -59,7 +59,7 @@
 
 <script setup>
 import { ref, watch } from 'vue'
-import { getExamModules, getModuleStats } from '../api'
+import { getExamStats } from '../api'
 import { useExamStore } from '../stores/exam'
 
 const examStore = useExamStore()
@@ -80,7 +80,7 @@ watch(() => examStore.state.currentExamId, async (id) => {
 async function loadStats(examId) {
   loading.value = true
   try {
-    const res = await getExamModules(examId)
+    const res = await getExamStats(examId)
     const modules = res.data.data || []
 
     if (modules.length === 0) {
@@ -89,33 +89,15 @@ async function loadStats(examId) {
       return
     }
 
-    const results = await Promise.all(
-      modules.map(async (mod) => {
-        try {
-          const statRes = await getModuleStats(mod.id)
-          const s = statRes.data.data
-          return {
-            id: mod.id,
-            name: mod.name,
-            total: s.total_questions || mod.question_count || 0,
-            answered: s.total_answered || 0,
-            correct: s.correct_count || 0,
-            accuracy: s.accuracy || 0,
-            unanswered: s.unanswered ?? ((mod.question_count || 0) - (s.total_answered || 0)),
-          }
-        } catch {
-          return {
-            id: mod.id,
-            name: mod.name,
-            total: mod.question_count || 0,
-            answered: 0,
-            correct: 0,
-            accuracy: 0,
-            unanswered: mod.question_count || 0,
-          }
-        }
-      })
-    )
+    const results = modules.map(mod => ({
+      id: mod.id,
+      name: mod.name,
+      total: mod.total_questions || 0,
+      answered: mod.total_answered || 0,
+      correct: mod.correct_count || 0,
+      accuracy: mod.accuracy || 0,
+      unanswered: mod.unanswered ?? ((mod.total_questions || 0) - (mod.total_answered || 0)),
+    }))
 
     moduleStats.value = results
 

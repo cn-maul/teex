@@ -70,7 +70,17 @@ api.interceptors.response.use(
         isRedirectingToLogin = true
         // 用 location.replace 避免在 history 中留下可回退的记录
         window.location.replace('/login')
+        // 重置标记，防止导航被取消后标记永久残留
+        setTimeout(() => { isRedirectingToLogin = false }, 2000)
       }
+      return Promise.reject(error)
+    }
+    if (error.response?.status === 429) {
+      showToast('请求过于频繁，请稍后再试')
+      return Promise.reject(error)
+    }
+    if (error.response?.status === 500) {
+      showToast('服务器内部错误，请稍后重试')
       return Promise.reject(error)
     }
     const message = error.response?.data?.error
@@ -90,6 +100,7 @@ export const getQuestion = (id) => api.get(`/questions/${id}`)
 export const createQuestion = (data) => api.post('/questions', data)
 export const updateQuestion = (id, data) => api.put(`/questions/${id}`, data)
 export const deleteQuestion = (id) => api.delete(`/questions/${id}`)
+export const batchDeleteQuestions = (ids) => api.delete('/questions/batch', { data: { ids } })
 
 // 刷题
 export const startQuiz = (data) => api.post('/quiz/start', data)
@@ -99,6 +110,7 @@ export const submitBatchAnswers = (data) => api.post('/quiz/submit-batch', data)
 // 统计
 export const getStats = () => api.get('/stats')
 export const getModuleStats = (id) => api.get(`/stats/module/${id}`)
+export const getExamStats = (examId) => api.get(`/exams/${examId}/stats`)
 // 数据管理
 export const deleteRecords = () => api.delete('/records')
 
@@ -122,6 +134,11 @@ export const deleteModule = (id) => api.delete(`/modules/${id}`)
 export const login = (data) => api.post('/auth/login', data)
 export const register = (data) => api.post('/auth/register', data)
 export const getProfile = () => api.get('/profile')
+export const updateProfile = (data) => api.put('/profile', data)
+export const changePassword = (data) => api.put('/profile/password', data)
+
+// 管理员
+export const getUsers = () => api.get('/admin/users')
 
 export default api
 export { showToast }

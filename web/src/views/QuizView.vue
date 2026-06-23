@@ -316,13 +316,6 @@
           <button v-else class="btn btn-primary btn-lg" @click="nextQuestion">
             {{ currentIndex < questions.length - 1 ? '下一题' : '查看结果' }}
           </button>
-          <button
-            v-if="!showFeedback && currentIndex > 0"
-            class="btn btn-ghost btn-lg"
-            @click="submitEarly"
-          >
-            交卷
-          </button>
         </div>
       </div>
     </template>
@@ -334,6 +327,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { startQuiz, submitAnswer as apiSubmitAnswer, submitBatchAnswers } from '../api'
 import { useExamStore } from '../stores/exam'
+import { getTypeLabel, parseOptions, getOptionLetter, getOptionText } from '../utils/quiz'
 
 const route = useRoute()
 const router = useRouter()
@@ -382,11 +376,7 @@ const accuracy = computed(() => {
 })
 
 const parsedOptions = computed(() => {
-  try {
-    return JSON.parse(currentQuestion.value.options || '[]')
-  } catch {
-    return []
-  }
+  return parseOptions(currentQuestion.value.options)
 })
 
 // 考试模式
@@ -461,9 +451,6 @@ function handleKeydown(e) {
     const option = parsedOptions.value.find(opt => getOptionLetter(opt) === letter)
     if (option) {
       selectOption(option)
-      if (!showFeedback.value && selectedOption.value) {
-        setTimeout(() => submitSingleAnswer(), 50)
-      }
     }
     return
   }
@@ -481,29 +468,6 @@ function handleKeydown(e) {
 }
 
 // ====== 工具函数 ======
-
-function parseOptions(optionsStr) {
-  try {
-    return JSON.parse(optionsStr || '[]')
-  } catch {
-    return []
-  }
-}
-
-function getTypeLabel(type) {
-  const labels = { single: '单选题', multi: '多选题', judge: '判断题', fill: '填空题' }
-  return labels[type] || '单选题'
-}
-
-function getOptionLetter(option) {
-  if (!option) return ''
-  return option.charAt(0)
-}
-
-function getOptionText(option) {
-  if (!option || option.length < 2) return option || ''
-  return option.substring(1).replace(/^[\s.、\s]+/, '').trim()
-}
 
 function startTimer() {
   questionStartTime.value = Date.now()
@@ -605,11 +569,6 @@ function nextQuestion() {
   } else {
     finished.value = true
   }
-}
-
-// 解析模式：提前交卷
-async function submitEarly() {
-  finished.value = true
 }
 
 // 解析模式结果页获取某题的选项

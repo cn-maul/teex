@@ -1,28 +1,33 @@
-import { reactive, computed } from 'vue'
+import { reactive, ref, computed } from 'vue'
 
-const state = reactive({
-  token: localStorage.getItem('token') || '',
-  user: JSON.parse(localStorage.getItem('user') || 'null')
-})
+const token = ref(localStorage.getItem('token') || '')
+function parseUser() {
+  try {
+    const raw = localStorage.getItem('user')
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    localStorage.removeItem('user')
+    return null
+  }
+}
+const user = ref(parseUser())
 
 export function useAuthStore() {
-  const isLoggedIn = computed(() => !!state.token)
-  const user = computed(() => state.user)
-  const token = computed(() => state.token)
+  const isLoggedIn = computed(() => !!token.value)
 
   function setAuth(tokenVal, userVal) {
-    state.token = tokenVal
-    state.user = userVal
+    token.value = tokenVal
+    user.value = userVal
     localStorage.setItem('token', tokenVal)
     localStorage.setItem('user', JSON.stringify(userVal))
   }
 
   function logout() {
-    state.token = ''
-    state.user = null
+    token.value = ''
+    user.value = null
     localStorage.removeItem('token')
     localStorage.removeItem('user')
   }
 
-  return { isLoggedIn, user, token, setAuth, logout }
+  return reactive({ isLoggedIn, user, token, setAuth, logout })
 }

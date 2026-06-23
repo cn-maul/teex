@@ -55,7 +55,7 @@
               <input type="checkbox" class="row-checkbox" :checked="allSelected" @change="toggleSelectAll" />
             </th>
             <th style="width: 56px">ID</th>
-            <th style="width: 72px">题型</th>
+            <th style="width: 80px">题型</th>
             <th>题干</th>
             <th style="width: 72px">答案</th>
             <th style="width: 80px">难度</th>
@@ -187,9 +187,10 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import {
   getQuestions, createQuestion, updateQuestion, deleteQuestion,
-  getExamModules, importQuestions
+  getExamModules, importQuestions, batchDeleteQuestions, showToast,
 } from '../api'
 import { useExamStore } from '../stores/exam'
+import { getTypeLabel } from '../utils/quiz'
 
 const examStore = useExamStore()
 
@@ -239,18 +240,15 @@ async function batchDelete() {
   const ids = [...selectedIds.value]
   if (ids.length === 0) return
   if (!confirm(`确定要删除选中的 ${ids.length} 道题目吗？`)) return
-  let success = 0, fail = 0
-  for (const id of ids) {
-    try {
-      await deleteQuestion(id)
-      success++
-    } catch { fail++ }
+  try {
+    const res = await batchDeleteQuestions(ids)
+    const deleted = res.data?.data?.deleted ?? ids.length
+    showToast(`成功删除 ${deleted} 道题目`, 'success')
+  } catch (err) {
+    showToast('删除失败：' + (err.response?.data?.error || err.message), 'error')
   }
   clearSelection()
   await loadQuestions()
-  if (fail > 0) {
-    alert(`删除完成：成功 ${success} 道，失败 ${fail} 道`)
-  }
 }
 
 watch(() => examStore.state.currentExamId, async () => {
@@ -311,7 +309,7 @@ function closeModal() {
 
 async function saveQuestion() {
   if (!form.value.moduleId || !form.value.content || !form.value.answer) {
-    alert('请填写模块、题干和正确答案'); return
+    showToast('请填写模块、题干和正确答案', 'error'); return
   }
   saving.value = true
   try {
@@ -325,14 +323,14 @@ async function saveQuestion() {
     else await createQuestion(data)
     closeModal(); await loadQuestions()
   } catch (err) {
-    alert('保存失败：' + (err.response?.data?.error || err.message))
+    showToast('保存失败：' + (err.response?.data?.error || err.message), 'error')
   } finally { saving.value = false }
 }
 
 async function confirmDelete(q) {
   if (!confirm(`确定要删除第 ${q.id} 题吗？`)) return
   try { await deleteQuestion(q.id); await loadQuestions() }
-  catch (err) { alert('删除失败') }
+  catch (err) { showToast('删除失败', 'error') }
 }
 
 const TEMPLATE_DATA = [
@@ -389,23 +387,19 @@ async function handleImport(event) {
   try {
     const text = await file.text()
     const data = JSON.parse(text)
-    if (!Array.isArray(data)) { alert('JSON 格式错误：需要是一个数组'); return }
+    if (!Array.isArray(data)) { showToast('JSON 格式错误：需要是一个数组', 'error'); return }
     const count = data.length
     if (!confirm(`即将导入 ${count} 道题目，确定吗？`)) return
     try {
       const res = await importQuestions(data)
       const imported = res.data?.imported ?? count
-      alert(`导入完成：成功导入 ${imported} 道题目`)
+      showToast(`导入完成：成功导入 ${imported} 道题目`, 'success')
     } catch (err) {
-      alert('导入失败：' + (err.response?.data?.error || err.message))
+      showToast('导入失败：' + (err.response?.data?.error || err.message), 'error')
     }
     await loadQuestions()
-  } catch (err) { alert('导入失败：文件格式错误') }
+  } catch (err) { showToast('导入失败：文件格式错误', 'error') }
   event.target.value = ''
-}
-
-function getTypeLabel(type) {
-  return { single: '单选', multi: '多选', judge: '判断', fill: '填空' }[type] || type
 }
 
 function truncate(str, len) {
@@ -566,6 +560,7 @@ h1 {
   border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .cell-content {

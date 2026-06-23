@@ -41,9 +41,10 @@ func Init(dbPath string) error {
 		return fmt.Errorf("failed to set WAL mode: %w", err)
 	}
 
-	// 配置连接池（SQLite 单写限制）
-	sqlDB.SetMaxOpenConns(1)
-	sqlDB.SetMaxIdleConns(1)
+	// 连接池配置：SQLite WAL 支持并发读 + 单写。
+	// 纯 Go 驱动 (glebarez/sqlite) 并发能力有限，保守设为 3。
+	sqlDB.SetMaxOpenConns(3)
+	sqlDB.SetMaxIdleConns(3)
 	sqlDB.SetConnMaxLifetime(0)
 
 	// 自动建表
@@ -139,7 +140,3 @@ func seedQuestionsTx(tx *gorm.DB, data []byte) error {
 	return nil
 }
 
-// GetDB 获取数据库实例
-func GetDB() *gorm.DB {
-	return DB
-}

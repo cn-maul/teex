@@ -41,3 +41,15 @@ func ListUsers() ([]model.User, error) {
 func DeleteUser(id uint) error {
 	return database.DB.Delete(&model.User{}, id).Error
 }
+
+// UpdateUser 更新用户信息
+func UpdateUser(user *model.User) error {
+	return database.DB.Model(&model.User{}).Where("id = ?", user.ID).Updates(map[string]interface{}{
+		"nickname": user.Nickname,
+	}).Error
+}
+
+// UpdatePassword 更新用户密码
+func UpdatePassword(userID uint, hashedPassword string) error {
+	return database.DB.Model(&model.User{}).Where("id = ?", userID).Update("password", hashedPassword).Error
+}

@@ -12,8 +12,10 @@
 - ✅ **统计分析** — 右侧面板实时显示当前考试的进度与正确率（按用户隔离）
 - ✅ **历史记录** — 时间线式场次列表 + 详情弹窗 + 分页
 - ✅ **键盘快捷键** — A/B/C/D 选选项，Enter 提交
+- ✅ **设置中心** — 账户资料管理、修改昵称/密码、个人刷题概览、刷题偏好配置
 - ✅ **数据导出/导入** — API 级别的数据备份能力
 - ✅ **移动端适配** — 响应式布局
+- ✅ **管理员权限控制** — 路由守卫 + API 中间件双重保护，管理页面仅管理员可访问
 
 ### 支持的考试类型
 
@@ -95,6 +97,8 @@ npm run dev
 ### 用户信息（需认证）
 
 - `GET /api/profile` — 获取当前用户信息
+- `PUT /api/profile` — 修改昵称 `{nickname}`
+- `PUT /api/profile/password` — 修改密码 `{old_password, new_password}`
 - `GET /api/admin/users` — 获取用户列表（仅管理员）
 
 > 以下所有接口均需在请求头中携带 `Authorization: Bearer <token>`
@@ -183,13 +187,13 @@ teex/
 │   │   ├── answer_handler.go         # 答题相关HTTP处理器
 │   │   ├── exam_handler.go           # 考试类型/模块 CRUD + 健康检查 + 数据导出/导入
 │   │   ├── question_handler.go       # 题目 CRUD + 批量导入（含逐条校验）
-│   │   └── user_handler.go           # 注册/登录/获取用户信息/用户列表
+│   │   └── user_handler.go           # 注册/登录/用户信息/修改昵称/修改密码/用户列表
 │   ├── repository/
 │   │   ├── answer_repo.go            # 答题记录CRUD + 按用户统计查询
 │   │   ├── exam_repo.go              # 考试类型/模块CRUD + 级联删除
 │   │   ├── question_repo.go          # 题目CRUD + 筛选 + 随机选题
 │   │   ├── session_repo.go           # 考试场次CRUD（按用户过滤）
-│   │   └── user_repo.go              # 用户CRUD
+│   │   └── user_repo.go              # 用户CRUD + 修改昵称/密码
 │   ├── service/
 │   │   ├── answer_service.go         # 答案比对 + 批量交卷 + 缓存失效
 │   │   ├── exam_service.go           # 考试类型业务 + 数据导出/导入 + 统计缓存层

@@ -1,14 +1,32 @@
 package util
 
 import (
+	"crypto/rand"
 	"errors"
+	"log"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// JWT 密钥（生产环境应从环境变量读取）
-var JWTSecret = []byte("teex-secret-key-change-in-production")
+// JWTSecret is the signing key. It is read from the JWT_SECRET environment
+// variable. If that variable is unset or empty, a random 32-byte key is
+// generated and a warning is printed.
+var JWTSecret []byte
+
+func init() {
+	if env := os.Getenv("JWT_SECRET"); env != "" {
+		JWTSecret = []byte(env)
+	} else {
+		key := make([]byte, 32)
+		if _, err := rand.Read(key); err != nil {
+			log.Fatalf("FATAL: failed to generate random JWT secret: %v", err)
+		}
+		JWTSecret = key
+		log.Println("WARNING: JWT_SECRET not set – using a random key. Tokens will be invalidated on restart.")
+	}
+}
 
 type Claims struct {
 	UserID   uint   `json:"user_id"`

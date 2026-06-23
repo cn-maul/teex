@@ -22,13 +22,13 @@ type Module struct {
 // Question 题目：支持单选、多选、判断、填空
 type Question struct {
 	ID         uint   `gorm:"primaryKey" json:"id"`
-	ModuleID   uint   `gorm:"index" json:"module_id"`
+	ModuleID   uint   `gorm:"index:idx_module_difficulty" json:"module_id"`
 	Type       string `gorm:"size:20;default:single" json:"type"`        // single/multi/judge/fill
 	Content    string `gorm:"type:text" json:"content"`                  // 题干（支持 Markdown）
 	Options    string `gorm:"type:text" json:"options"`                  // JSON 数组 ["A.xxx","B.xxx",...]
 	Answer     string `gorm:"size:200" json:"answer"`                    // 正确答案 "A" 或 "A,B,C"
 	Analysis   string `gorm:"type:text" json:"analysis"`                 // 解析
-	Difficulty int    `gorm:"default:1;index" json:"difficulty"`         // 1-5
+	Difficulty int    `gorm:"default:1;index:idx_module_difficulty" json:"difficulty"`         // 1-5
 	Tags       string `gorm:"size:500" json:"tags"`                      // 逗号分隔标签
 	Source     string `gorm:"size:200" json:"source"`                    // 来源：2024国考/2024省考
 	Module     *Module `gorm:"foreignKey:ModuleID" json:"module,omitempty"`
@@ -37,8 +37,8 @@ type Question struct {
 // UserAnswer 答题记录
 type UserAnswer struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`
-	UserID        uint      `gorm:"index" json:"user_id"`
-	QuestionID    uint      `gorm:"index:idx_question_id;index:idx_qid_correct" json:"question_id"`
+	UserID        uint      `gorm:"index:idx_user_question" json:"user_id"`
+	QuestionID    uint      `gorm:"index:idx_question_id;index:idx_qid_correct;index:idx_user_question" json:"question_id"`
 	ExamSessionID uint      `gorm:"index" json:"exam_session_id"`
 	UserInput     string    `gorm:"size:200" json:"user_input"` // 用户选择
 	IsCorrect     bool      `gorm:"index:idx_qid_correct" json:"is_correct"`
