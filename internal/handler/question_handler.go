@@ -177,7 +177,7 @@ func ImportQuestions(c *gin.Context) {
 			invalidCount++
 			continue
 		}
-		if err := validator.ValidateQuestion(&q); err != nil {
+		if err := validator.ValidateQuestionForImport(&q); err != nil {
 			invalidCount++
 			continue
 		}

@@ -25,6 +25,7 @@ func Seed() error {
 	if count > 0 {
 		// 数据库已初始化，但仍需确保管理员账户存在
 		ensureAdmin()
+		ensureRegistrationConfig()
 		fmt.Println("Database already seeded, skipping...")
 		return nil
 	}
@@ -44,6 +45,7 @@ func Seed() error {
 	}
 
 	ensureAdmin()
+	ensureRegistrationConfig()
 	return nil
 }
 
@@ -75,5 +77,14 @@ func ensureAdmin() {
 		} else {
 			fmt.Println("Default admin user created.")
 		}
+	}
+}
+
+func ensureRegistrationConfig() {
+	var count int64
+	DB.Model(&model.SystemConfig{}).Where("key = ?", "registration_enabled").Count(&count)
+	if count == 0 {
+		DB.Create(&model.SystemConfig{Key: "registration_enabled", Value: "false"})
+		fmt.Println("Registration disabled by default (set via admin settings).")
 	}
 }

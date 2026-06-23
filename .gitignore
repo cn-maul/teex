@@ -41,6 +41,12 @@ SOFTWARE_REPORT.md
 tmp/
 temp/
 
+# Temporary data files (exam year imports, tool configs)
+/*.json
+/*.md
+!README.md
+reasonix.toml
+
 # Frontend build artifacts (web/ has its own .gitignore too)
 web/node_modules/
 web/dist/

@@ -26,7 +26,13 @@ const settingsState = reactive({
 function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
-    return raw ? JSON.parse(raw) : {}
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    // 校验 quizMode 合法性，防止脏数据
+    if (parsed.quizMode && parsed.quizMode !== 'analysis' && parsed.quizMode !== 'exam') {
+      delete parsed.quizMode
+    }
+    return parsed
   } catch {
     return {}
   }
@@ -119,6 +125,7 @@ export function useExamStore() {
   }
 
   function updateQuizMode(mode) {
+    if (mode !== 'analysis' && mode !== 'exam') return // 忽略非法值
     settingsState.quizMode = mode
     saveSettings()
   }

@@ -74,6 +74,31 @@
       </div>
     </div>
 
+    <!-- 系统设置（仅管理员） -->
+    <div v-if="authStore.user?.role === 'admin'" class="settings-section">
+      <div class="section-header">
+        <h2>系统设置</h2>
+        <p class="section-desc">管理系统全局配置</p>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <label class="setting-label">开放注册</label>
+          <p class="setting-desc">开启后，用户可以自行注册账号（注册的用户为普通角色）</p>
+        </div>
+        <div class="setting-control">
+          <button
+            class="toggle-btn"
+            :class="{ active: registrationEnabled }"
+            :disabled="registrationLoading"
+            @click="toggleRegistration"
+          >
+            {{ registrationLoading ? '加载中...' : (registrationEnabled ? '已开放' : '已关闭') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 个人概览 -->
     <div class="settings-section">
       <div class="section-header">
@@ -188,7 +213,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useExamStore } from '../stores/exam'
 import { useAuthStore } from '../stores/auth.js'
-import { deleteRecords, getStats, updateProfile, changePassword } from '../api'
+import { deleteRecords, getStats, updateProfile, changePassword, getRegistrationStatus, setRegistrationStatus } from '../api'
 
 const examStore = useExamStore()
 const authStore = useAuthStore()
@@ -208,6 +233,10 @@ const passwordForm = reactive({ oldPassword: '', newPassword: '', confirmPasswor
 // Toast
 const toast = ref(null)
 
+// 注册开关
+const registrationEnabled = ref(false)
+const registrationLoading = ref(true)
+
 onMounted(async () => {
   try {
     const res = await getStats()
@@ -217,11 +246,31 @@ onMounted(async () => {
   } finally {
     statsLoading.value = false
   }
+
+  if (authStore.user?.role === 'admin') {
+    try {
+      const regRes = await getRegistrationStatus()
+      registrationEnabled.value = regRes.data.data?.enabled ?? false
+    } catch { /* ignore */ } finally {
+      registrationLoading.value = false
+    }
+  }
 })
 
 function showToast(message, type = 'success') {
   toast.value = { message, type }
   setTimeout(() => { toast.value = null }, 3000)
+}
+
+async function toggleRegistration() {
+  try {
+    const newVal = !registrationEnabled.value
+    await setRegistrationStatus({ enabled: newVal })
+    registrationEnabled.value = newVal
+    showToast(newVal ? '注册已开放' : '注册已关闭')
+  } catch (e) {
+    showToast(e.response?.data?.error || '操作失败', 'error')
+  }
 }
 
 function formatDate(dateStr) {
@@ -635,6 +684,35 @@ h1 {
 
 .btn-danger:hover {
   background: #fecaca;
+}
+
+/* Toggle button */
+.toggle-btn {
+  padding: 0.4rem 1rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  min-width: 80px;
+}
+
+.toggle-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+
+.toggle-btn.active {
+  background: var(--success-bg);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.toggle-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Mode toggle */

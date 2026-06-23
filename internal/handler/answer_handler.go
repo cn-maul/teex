@@ -2,6 +2,7 @@ package handler
 
 import (
 	"log"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -80,7 +81,7 @@ func StartQuiz(c *gin.Context) {
 		return
 	}
 
-	response.OK(c, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"data":       questions,
 		"total":      len(questions),
 		"module":     req.ModuleID,
@@ -124,7 +125,7 @@ func SubmitAnswer(c *gin.Context) {
 		return
 	}
 
-	response.OK(c, result)
+	c.JSON(http.StatusOK, gin.H{"data": result})
 }
 
 // SubmitBatchAnswersRequest 批量提交答案请求
@@ -168,7 +169,7 @@ func SubmitBatchAnswers(c *gin.Context) {
 		return
 	}
 
-	response.OK(c, results)
+	c.JSON(http.StatusOK, gin.H{"data": results})
 }
 
 // GetStats 获取统计数据

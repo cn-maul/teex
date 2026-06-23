@@ -117,6 +117,9 @@ func Setup() *gin.Engine {
 		api.DELETE("/records", handler.ClearAllRecords)
 		api.GET("/export", handler.ExportData)
 		api.POST("/import", handler.ImportFullData)
+
+		// 系统设置
+		api.GET("/settings/registration", handler.GetRegistrationStatus)
 	}
 
 	// 管理员路由
@@ -124,6 +127,10 @@ func Setup() *gin.Engine {
 	admin.Use(middleware.AuthRequired(), middleware.AdminRequired())
 	{
 		admin.GET("/users", handler.ListUsers)
+		admin.POST("/users", handler.AdminCreateUser)
+		admin.PUT("/users/:id", handler.AdminUpdateUser)
+		admin.DELETE("/users/:id", handler.AdminDeleteUser)
+		admin.PUT("/settings/registration", handler.SetRegistrationStatus)
 	}
 
 	return r

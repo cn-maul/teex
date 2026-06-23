@@ -25,9 +25,16 @@ export function getTypeLabel(type) {
  * @returns {string[]}
  */
 export function parseOptions(optionsStr) {
+  if (!optionsStr) return []
   try {
-    return JSON.parse(optionsStr || '[]')
-  } catch {
+    const parsed = JSON.parse(optionsStr)
+    if (!Array.isArray(parsed)) {
+      console.warn('[parseOptions] options is not an array:', optionsStr)
+      return []
+    }
+    return parsed
+  } catch (e) {
+    console.warn('[parseOptions] Failed to parse options:', optionsStr, e.message)
     return []
   }
 }

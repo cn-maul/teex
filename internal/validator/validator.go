@@ -31,6 +31,21 @@ func ValidateQuestion(q *model.Question) error {
 	return nil
 }
 
+// ValidateQuestionForImport validates a question during import, allowing empty answers
+// so that questions can be imported first and answers filled in later.
+func ValidateQuestionForImport(q *model.Question) error {
+	if q.Content == "" {
+		return fmt.Errorf("题干不能为空")
+	}
+	if !ValidQuestionTypes[q.Type] {
+		return fmt.Errorf("无效的题目类型")
+	}
+	if q.Difficulty < 1 || q.Difficulty > 5 {
+		return fmt.Errorf("难度范围必须在 1-5 之间")
+	}
+	return nil
+}
+
 // ParseID extracts a uint path parameter from the gin context.
 func ParseID(c *gin.Context, name string) (uint, error) {
 	s := c.Param(name)

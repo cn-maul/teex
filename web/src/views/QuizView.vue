@@ -30,8 +30,12 @@
           <polyline points="14 2 14 8 20 8"></polyline>
         </svg>
       </div>
-      <p>暂无题目</p>
-      <button class="btn btn-primary" @click="$router.back()">返回</button>
+      <p v-if="loadError" style="color: var(--error); margin-bottom: 0.5rem;">{{ loadError }}</p>
+      <p v-else>暂无题目</p>
+      <div class="empty-actions">
+        <button class="btn btn-primary" @click="loadError ? loadQuestions() : $router.back()">{{ loadError ? '重试' : '返回' }}</button>
+        <button v-if="loadError" class="btn btn-ghost" @click="$router.back()">返回</button>
+      </div>
     </div>
 
     <!-- ========== 考试模式：答题页面 ========== -->
@@ -55,7 +59,7 @@
             </div>
           </div>
 
-          <div class="eq-content">{{ q.content }}</div>
+          <div class="eq-content">{{ q.content || '（题目内容加载失败）' }}</div>
 
           <div class="options">
             <div
@@ -274,7 +278,7 @@
         </div>
 
         <div class="question-content">
-          <p>{{ currentQuestion.content }}</p>
+          <p>{{ currentQuestion.content || '（题目内容加载失败）' }}</p>
         </div>
 
         <div class="options">
@@ -319,11 +323,17 @@
         </div>
       </div>
     </template>
+
+    <!-- 兜底：防止未知模式白屏 -->
+    <div v-else class="empty">
+      <p>加载异常，请刷新页面重试</p>
+      <button class="btn btn-primary" @click="$router.back()">返回</button>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { startQuiz, submitAnswer as apiSubmitAnswer, submitBatchAnswers } from '../api'
 import { useExamStore } from '../stores/exam'
@@ -337,7 +347,12 @@ const examStore = useExamStore()
 const questions = ref([])
 const loading = ref(true)
 const finished = ref(false)
-const quizMode = ref(examStore.settings.quizMode || 'analysis')
+const loadError = ref('')
+// 只允许 'analysis' 或 'exam'，其他值一律回退到 'analysis'
+const quizMode = computed(() => {
+  const mode = examStore.settings.quizMode
+  return mode === 'exam' || mode === 'analysis' ? mode : 'analysis'
+})
 
 // ====== 解析模式状态 ======
 const currentIndex = ref(0)
@@ -408,6 +423,12 @@ const examUnanswered = computed(() => {
 onMounted(async () => {
   document.addEventListener('keydown', handleKeydown)
   await loadQuestions()
+})
+
+watch(() => route.params.moduleId, (newId, oldId) => {
+  if (newId && newId !== oldId) {
+    loadQuestions()
+  }
 })
 
 onUnmounted(() => {
@@ -482,17 +503,27 @@ function getDuration() {
 
 async function loadQuestions() {
   loading.value = true
+  loadError.value = ''
   try {
     const mode = route.query.mode || 'default'
     const count = examStore.settings.quizCount || 10
     const difficulty = parseInt(route.query.difficulty) || 0
+    const moduleId = parseInt(route.params.moduleId)
+    if (!moduleId || isNaN(moduleId)) {
+      loadError.value = '无效的模块ID'
+      loading.value = false
+      return
+    }
+    console.log('[QuizView] loadQuestions called', { moduleId, count, mode, difficulty })
     const res = await startQuiz({
-      module_id: parseInt(route.params.moduleId),
+      module_id: moduleId,
       count,
       mode,
       difficulty
     })
-    questions.value = res.data.data
+    console.log('[QuizView] API response:', res.data)
+    questions.value = res.data.data || []
+    console.log('[QuizView] questions set, length:', questions.value.length, 'quizMode:', quizMode.value)
     sessionId.value = res.data.session_id || null
     examSessionId.value = res.data.session_id || null
     currentIndex.value = 0
@@ -508,7 +539,17 @@ async function loadQuestions() {
     startTimer()
     examStartTime.value = Date.now()
   } catch (err) {
-    console.error('Failed to start quiz:', err)
+    console.error('[QuizView] Failed to start quiz:', err)
+    console.error('[QuizView] Error response:', err.response?.data)
+    console.error('[QuizView] Route params:', route.params, 'Query:', route.query)
+    const serverMsg = err.response?.data?.error
+    if (err.response?.status === 401) {
+      loadError.value = '登录已过期，请重新登录'
+    } else if (serverMsg) {
+      loadError.value = serverMsg
+    } else {
+      loadError.value = '加载题目失败，请检查网络后重试'
+    }
   } finally {
     loading.value = false
   }
@@ -546,7 +587,8 @@ async function submitSingleAnswer() {
     const res = await apiSubmitAnswer({
       question_id: currentQuestion.value.id,
       user_input: selectedOption.value,
-      duration: getDuration()
+      duration: getDuration(),
+      session_id: sessionId.value || 0
     })
     isCorrect.value = res.data.data.is_correct
     showFeedback.value = true
@@ -730,6 +772,13 @@ async function restartQuiz() {
 
 .empty-icon {
   margin-bottom: 1rem;
+}
+
+.empty-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 1rem;
 }
 
 /* ====== Finished card ====== */

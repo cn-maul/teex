@@ -68,3 +68,9 @@ type ModuleWithStats struct {
 	QuestionCount int64 `json:"question_count"`
 	Unanswered    int64 `json:"unanswered"`
 }
+
+// SystemConfig 系统配置（键值对）
+type SystemConfig struct {
+	Key   string `gorm:"primaryKey;size:50" json:"key"`
+	Value string `gorm:"size:500" json:"value"`
+}
