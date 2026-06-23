@@ -86,7 +86,11 @@ func GetProfile(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	userID := userIDRaw.(uint)
+	userID, ok := userIDRaw.(uint)
+	if !ok {
+		response.Error(c, 401, "认证信息无效")
+		return
+	}
 	user, err := service.GetProfile(userID)
 	if err != nil {
 		response.Error(c, 500, "获取用户信息失败")
@@ -125,7 +129,11 @@ func UpdateProfile(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	userID := userIDRaw.(uint)
+	userID, ok := userIDRaw.(uint)
+	if !ok {
+		response.Error(c, 401, "认证信息无效")
+		return
+	}
 	if err := service.UpdateProfile(userID, req.Nickname); err != nil {
 		log.Printf("UpdateProfile error: %v", err)
 		response.Error(c, 400, err.Error())
@@ -154,7 +162,11 @@ func ChangePassword(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	userID := userIDRaw.(uint)
+	userID, ok := userIDRaw.(uint)
+	if !ok {
+		response.Error(c, 401, "认证信息无效")
+		return
+	}
 	if err := service.ChangePassword(userID, req.OldPassword, req.NewPassword); err != nil {
 		log.Printf("ChangePassword error: %v", err)
 		response.Error(c, 400, err.Error())
@@ -285,7 +297,11 @@ func AdminDeleteUser(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	currentAdminID := userIDRaw.(uint)
+	currentAdminID, ok := userIDRaw.(uint)
+	if !ok {
+		response.Error(c, 401, "认证信息无效")
+		return
+	}
 	if err := service.AdminDeleteUser(id, currentAdminID); err != nil {
 		log.Printf("AdminDeleteUser error: %v", err)
 		response.Error(c, 400, err.Error())

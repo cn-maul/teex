@@ -54,6 +54,17 @@
         <StatsPanel />
       </div>
     </template>
+
+    <!-- 全局确认对话框 -->
+    <ConfirmModal
+      :visible="confirmState.visible"
+      :title="confirmState.title"
+      :message="confirmState.message"
+      :confirm-text="confirmState.confirmText"
+      :danger-mode="confirmState.dangerMode"
+      @confirm="handleConfirm"
+      @cancel="handleCancel"
+    />
   </div>
 </template>
 
@@ -64,6 +75,10 @@ import { useExamStore } from './stores/exam'
 import { useAuthStore } from './stores/auth.js'
 import Sidebar from './components/Sidebar.vue'
 import StatsPanel from './components/StatsPanel.vue'
+import ConfirmModal from './components/ConfirmModal.vue'
+import { useConfirm } from './utils/confirm'
+
+const { confirmState, handleConfirm, handleCancel } = useConfirm()
 
 const router = useRouter()
 const examStore = useExamStore()

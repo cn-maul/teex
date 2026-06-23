@@ -68,7 +68,11 @@ func StartQuiz(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	userID := userIDRaw.(uint)
+	userID, ok := userIDRaw.(uint)
+	if !ok {
+		response.Error(c, 401, "认证信息无效")
+		return
+	}
 	questions, sessionID, err := service.StartQuiz(req.ModuleID, req.Count, req.Mode, req.Difficulty, req.Tags, userID)
 	if err != nil {
 		log.Printf("StartQuiz error: %v", err)
@@ -117,7 +121,11 @@ func SubmitAnswer(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	userID := userIDRaw.(uint)
+	userID, ok := userIDRaw.(uint)
+	if !ok {
+		response.Error(c, 401, "认证信息无效")
+		return
+	}
 	result, err := service.SubmitAnswer(req.QuestionID, req.UserInput, req.Duration, req.SessionID, userID)
 	if err != nil {
 		log.Printf("SubmitAnswer error: %v", err)
@@ -148,7 +156,6 @@ func SubmitBatchAnswers(c *gin.Context) {
 	}
 
 	var results []service.AnswerResult
-	var err error
 
 	userIDRaw, exists := c.Get("user_id")
 	if !exists {
@@ -156,12 +163,18 @@ func SubmitBatchAnswers(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	userID := userIDRaw.(uint)
-	if req.SessionID > 0 {
-		results, err = service.SubmitBatchAnswersWithSession(req.SessionID, req.Answers, userID)
-	} else {
-		results, err = service.SubmitBatchAnswers(req.Answers, userID)
+	userID, ok := userIDRaw.(uint)
+	if !ok {
+		response.Error(c, 401, "认证信息无效")
+		return
 	}
+
+	if req.SessionID == 0 {
+		response.Error(c, 400, "批量提交必须提供有效的考试场次 ID")
+		return
+	}
+
+	results, err := service.SubmitBatchAnswersWithSession(req.SessionID, req.Answers, userID)
 
 	if err != nil {
 		log.Printf("SubmitBatchAnswers error: %v", err)
@@ -180,7 +193,11 @@ func GetStats(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	userID := userIDRaw.(uint)
+	userID, ok := userIDRaw.(uint)
+	if !ok {
+		response.Error(c, 401, "认证信息无效")
+		return
+	}
 	stats, err := service.GetOverallStats(userID)
 	if err != nil {
 		log.Printf("GetStats error: %v", err)
@@ -204,7 +221,11 @@ func GetModuleStats(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	userID := userIDRaw.(uint)
+	userID, ok := userIDRaw.(uint)
+	if !ok {
+		response.Error(c, 401, "认证信息无效")
+		return
+	}
 	stats, err := service.GetModuleStats(id, userID)
 	if err != nil {
 		log.Printf("GetModuleStats error: %v", err)
@@ -222,15 +243,19 @@ func ClearAllRecords(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	userID := userIDRaw.(uint)
+	userID, ok := userIDRaw.(uint)
+	if !ok {
+		response.Error(c, 401, "认证信息无效")
+		return
+	}
 	uid := userID
 	if err := service.ClearAllRecords(uid); err != nil {
 		log.Printf("ClearAllRecords error: %v", err)
 		response.Error(c, 500, "操作失败，请稍后重试")
 		return
 	}
-	// Clear the user's stats cache
-	cache.InvalidateUserStats(uid)
+	// Clear all caches since clearing records affects all stats
+	cache.InvalidateAll()
 	response.OKWithMessage(c, nil, "记录已清空")
 }
 
@@ -252,7 +277,11 @@ func GetSessions(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	userID := userIDRaw.(uint)
+	userID, ok := userIDRaw.(uint)
+	if !ok {
+		response.Error(c, 401, "认证信息无效")
+		return
+	}
 	sessions, total, err := service.GetSessions(page, size, userID)
 	if err != nil {
 		log.Printf("GetSessions error: %v", err)
@@ -276,7 +305,11 @@ func GetSession(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	userID := userIDRaw.(uint)
+	userID, ok := userIDRaw.(uint)
+	if !ok {
+		response.Error(c, 401, "认证信息无效")
+		return
+	}
 	session, err := service.GetSession(id, userID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -303,7 +336,11 @@ func GetSessionAnswers(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	userID := userIDRaw.(uint)
+	userID, ok := userIDRaw.(uint)
+	if !ok {
+		response.Error(c, 401, "认证信息无效")
+		return
+	}
 
 	// Check pagination parameters
 	pageStr := c.Query("page")

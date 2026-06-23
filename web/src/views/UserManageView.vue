@@ -100,7 +100,11 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getUsers, adminCreateUser, adminUpdateUser, adminDeleteUser, showToast } from '../api'
+import { formatDate } from '../utils/format'
 import { useAuthStore } from '../stores/auth'
+import { useConfirm } from '../utils/confirm'
+
+const { showConfirm } = useConfirm()
 
 const authStore = useAuthStore()
 const users = ref([])
@@ -182,7 +186,7 @@ async function saveUser() {
 }
 
 async function confirmDelete(user) {
-  if (!confirm(`确定要删除用户「${user.username}」吗？`)) return
+  if (!await showConfirm({ message: `确定要删除用户「${user.username}」吗？`, dangerMode: true })) return
   try {
     await adminDeleteUser(user.id)
     showToast('用户已删除')
@@ -192,11 +196,6 @@ async function confirmDelete(user) {
   }
 }
 
-function formatDate(dateStr) {
-  if (!dateStr) return '-'
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
 </script>
 
 <style scoped>

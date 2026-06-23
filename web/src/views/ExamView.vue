@@ -6,7 +6,12 @@
     </div>
     
     <div v-if="loading" class="loading">加载中...</div>
-    
+
+    <div v-else-if="loadError" class="error-state">
+      <p>{{ loadError }}</p>
+      <button class="btn btn-primary" @click="loadError = ''; loadModules()">重试</button>
+    </div>
+
     <div v-else class="module-grid">
       <div 
         v-for="mod in modules" 
@@ -90,6 +95,7 @@ const examStore = useExamStore()
 const examName = ref('')
 const modules = ref([])
 const loading = ref(true)
+const loadError = ref('')
 
 const moduleDifficulty = reactive({})
 const moduleMode = reactive({})
@@ -104,6 +110,12 @@ const difficultyOptions = [
 ]
 
 onMounted(async () => {
+  await loadModules()
+})
+
+async function loadModules() {
+  loading.value = true
+  loadError.value = ''
   try {
     if (examStore.state.examList.length === 0) {
       await examStore.loadExams()
@@ -121,10 +133,11 @@ onMounted(async () => {
     })
   } catch (err) {
     console.error('Failed to load modules:', err)
+    loadError.value = '加载失败，请检查网络后重试'
   } finally {
     loading.value = false
   }
-})
+}
 
 function setModuleDifficulty(moduleId, difficulty) {
   moduleDifficulty[moduleId] = difficulty
@@ -197,6 +210,18 @@ h1 {
   text-align: center;
   padding: 2rem;
   color: var(--text-muted);
+}
+
+.error-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--text-muted);
+}
+
+.error-state p {
+  color: var(--error);
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
 }
 
 .module-grid {

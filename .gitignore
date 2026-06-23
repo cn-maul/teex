@@ -23,6 +23,7 @@ cmd/server/server
 # Tool metadata / cache
 .codegraph/
 .reasonix/
+.claude/
 
 # Environment / secrets
 .env

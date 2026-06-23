@@ -49,88 +49,84 @@ func Setup() *gin.Engine {
 	// 健康检查
 	r.GET("/api/health", handler.HealthCheck)
 
-	// 认证 (公开路由)
-	auth := r.Group("/api/auth")
+	// 认证 (公开路由，带限流)
+	authPublic := r.Group("/api/auth")
 	{
-		auth.POST("/register", handler.Register)
-		auth.POST("/login", handler.Login)
+		authPublic.POST("/register",
+			middleware.RateLimiter(middleware.RegisterRateLimit),
+			handler.Register)
+		authPublic.POST("/login",
+			middleware.RateLimiter(middleware.LoginRateLimit),
+			handler.Login)
 	}
 
-	// 需要认证的路由
+	// 普通用户可访问（仅需登录）
 	api := r.Group("/api")
-	api.Use(middleware.AuthRequired())
+	api.Use(middleware.RateLimiter(middleware.GeneralRateLimit))
 	{
 		// 用户信息
-		api.GET("/profile", handler.GetProfile)
-		api.PUT("/profile", handler.UpdateProfile)
-		api.PUT("/profile/password", handler.ChangePassword)
+		api.GET("/profile", middleware.AuthRequired(), handler.GetProfile)
+		api.PUT("/profile", middleware.AuthRequired(), handler.UpdateProfile)
+		api.PUT("/profile/password", middleware.AuthRequired(), handler.ChangePassword)
 
-		// 考试
-		exams := api.Group("/exams")
-		{
-			exams.GET("", handler.GetExamTypes)
-			exams.POST("", handler.CreateExamType)
-			exams.PUT("/:id", handler.UpdateExamType)
-			exams.DELETE("/:id", handler.DeleteExamType)
-			exams.GET("/:id/modules", handler.GetExamModules)
-			exams.GET("/:id/stats", handler.GetExamStats) // NEW
-		}
+		// 考试（只读）
+		api.GET("/exams", middleware.AuthRequired(), handler.GetExamTypes)
+		api.GET("/exams/:id/modules", middleware.AuthRequired(), handler.GetExamModules)
+		api.GET("/exams/:id/stats", middleware.AuthRequired(), handler.GetExamStats)
 
-		// 模块
-		modules := api.Group("/modules")
-		{
-			modules.POST("", handler.CreateModule)
-			modules.PUT("/:id", handler.UpdateModule)
-			modules.DELETE("/:id", handler.DeleteModule)
-		}
-
-		// 题目管理
-		questions := api.Group("/questions")
-		{
-			questions.GET("", handler.ListQuestions)
-			questions.GET("/:id", handler.GetQuestion)
-			questions.POST("", handler.CreateQuestion)
-			questions.PUT("/:id", handler.UpdateQuestion)
-			questions.DELETE("/:id", handler.DeleteQuestion)
-			questions.POST("/import", handler.ImportQuestions)
-			questions.DELETE("/batch", handler.BatchDeleteQuestions)
-		}
+		// 题目（只读）
+		api.GET("/questions", middleware.AuthRequired(), handler.ListQuestions)
+		api.GET("/questions/:id", middleware.AuthRequired(), handler.GetQuestion)
 
 		// 刷题
-		api.POST("/quiz/start", handler.StartQuiz)
-		api.POST("/quiz/answer", handler.SubmitAnswer)
-		api.POST("/quiz/submit-batch", handler.SubmitBatchAnswers)
+		api.POST("/quiz/start", middleware.AuthRequired(), handler.StartQuiz)
+		api.POST("/quiz/answer", middleware.AuthRequired(), handler.SubmitAnswer)
+		api.POST("/quiz/submit-batch", middleware.AuthRequired(), handler.SubmitBatchAnswers)
 
 		// 统计
-		api.GET("/stats", handler.GetStats)
-		api.GET("/stats/module/:id", handler.GetModuleStats)
+		api.GET("/stats", middleware.AuthRequired(), handler.GetStats)
+		api.GET("/stats/module/:id", middleware.AuthRequired(), handler.GetModuleStats)
 
 		// 考试场次
-		sessions := api.Group("/sessions")
-		{
-			sessions.GET("", handler.GetSessions)
-			sessions.GET("/:id", handler.GetSession)
-			sessions.GET("/:id/answers", handler.GetSessionAnswers)
-		}
+		api.GET("/sessions", middleware.AuthRequired(), handler.GetSessions)
+		api.GET("/sessions/:id", middleware.AuthRequired(), handler.GetSession)
+		api.GET("/sessions/:id/answers", middleware.AuthRequired(), handler.GetSessionAnswers)
 
-		// 数据管理
-		api.DELETE("/records", handler.ClearAllRecords)
-		api.GET("/export", handler.ExportData)
-		api.POST("/import", handler.ImportFullData)
+		// 数据管理（普通用户）
+		api.DELETE("/records", middleware.AuthRequired(), handler.ClearAllRecords)
 
 		// 系统设置
 		api.GET("/settings/registration", handler.GetRegistrationStatus)
-	}
 
-	// 管理员路由
-	admin := r.Group("/api/admin")
-	admin.Use(middleware.AuthRequired(), middleware.AdminRequired())
-	{
-		admin.GET("/users", handler.ListUsers)
-		admin.POST("/users", handler.AdminCreateUser)
-		admin.PUT("/users/:id", handler.AdminUpdateUser)
-		admin.DELETE("/users/:id", handler.AdminDeleteUser)
-		admin.PUT("/settings/registration", handler.SetRegistrationStatus)
+		// 考试管理（管理员）
+		api.POST("/exams", middleware.AuthRequired(), middleware.AdminRequired(), handler.CreateExamType)
+		api.PUT("/exams/:id", middleware.AuthRequired(), middleware.AdminRequired(), handler.UpdateExamType)
+		api.DELETE("/exams/:id", middleware.AuthRequired(), middleware.AdminRequired(), handler.DeleteExamType)
+
+		// 模块管理（管理员）
+		api.POST("/modules", middleware.AuthRequired(), middleware.AdminRequired(), handler.CreateModule)
+		api.PUT("/modules/:id", middleware.AuthRequired(), middleware.AdminRequired(), handler.UpdateModule)
+		api.DELETE("/modules/:id", middleware.AuthRequired(), middleware.AdminRequired(), handler.DeleteModule)
+
+		// 题目管理（管理员）
+		api.POST("/questions", middleware.AuthRequired(), middleware.AdminRequired(), handler.CreateQuestion)
+		api.PUT("/questions/:id", middleware.AuthRequired(), middleware.AdminRequired(), handler.UpdateQuestion)
+		api.DELETE("/questions/:id", middleware.AuthRequired(), middleware.AdminRequired(), handler.DeleteQuestion)
+		api.POST("/questions/import", middleware.AuthRequired(), middleware.AdminRequired(), handler.ImportQuestions)
+		api.DELETE("/questions/batch", middleware.AuthRequired(), middleware.AdminRequired(), handler.BatchDeleteQuestions)
+
+		// 数据管理（管理员）
+		api.GET("/export", middleware.AuthRequired(), middleware.AdminRequired(), handler.ExportData)
+		api.POST("/import", middleware.AuthRequired(), middleware.AdminRequired(), handler.ImportFullData)
+
+		// 用户管理（管理员）
+		api.GET("/users", middleware.AuthRequired(), middleware.AdminRequired(), handler.ListUsers)
+		api.POST("/users", middleware.AuthRequired(), middleware.AdminRequired(), handler.AdminCreateUser)
+		api.PUT("/users/:id", middleware.AuthRequired(), middleware.AdminRequired(), handler.AdminUpdateUser)
+		api.DELETE("/users/:id", middleware.AuthRequired(), middleware.AdminRequired(), handler.AdminDeleteUser)
+
+		// 系统设置（管理员）
+		api.PUT("/settings/registration", middleware.AuthRequired(), middleware.AdminRequired(), handler.SetRegistrationStatus)
 	}
 
 	return r

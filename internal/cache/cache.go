@@ -20,7 +20,10 @@ const TTL = 30 * time.Second
 // Get retrieves a value from the cache if it exists and has not expired.
 func Get(key string) (interface{}, bool) {
 	if val, ok := store.Load(key); ok {
-		entry := val.(Entry)
+		entry, ok := val.(Entry)
+		if !ok {
+			return nil, false
+		}
 		if time.Now().Before(entry.ExpiresAt) {
 			return entry.Data, true
 		}

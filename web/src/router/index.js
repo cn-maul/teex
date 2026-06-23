@@ -10,6 +10,7 @@ const routes = [
   { path: '/admin/exams', name: 'ExamManage', component: () => import('../views/ExamManageView.vue'), meta: { admin: true } },
   { path: '/admin/questions', name: 'QuestionManage', component: () => import('../views/QuestionManageView.vue'), meta: { admin: true } },
   { path: '/admin/users', name: 'UserManage', component: () => import('../views/UserManageView.vue'), meta: { admin: true } },
+  { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

@@ -31,7 +31,7 @@
             </div>
           </div>
           <div class="exam-header-right" @click.stop>
-            <span class="module-count">{{ (exam.modules || []).length }} 个科目</span>
+            <span class="module-count">{{ examModules[exam.id] ? examModules[exam.id].length + ' 个科目' : '点击展开查看科目' }}</span>
             <button class="btn-icon" @click="openExamModal(exam)" title="编辑">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
             </button>
@@ -159,6 +159,9 @@ import {
   showToast,
 } from '../api'
 import { useExamStore } from '../stores/exam'
+import { useConfirm } from '../utils/confirm'
+
+const { showConfirm } = useConfirm()
 
 const examStore = useExamStore()
 
@@ -246,7 +249,7 @@ async function saveExam() {
 }
 
 async function confirmDeleteExam(exam) {
-  if (!confirm(`确定要删除考试「${exam.name}」吗？其下所有科目也会被删除。`)) return
+  if (!await showConfirm({ message: `确定要删除考试「${exam.name}」吗？其下所有科目也会被删除。`, dangerMode: true })) return
   try {
     await deleteExamType(exam.id)
     delete examModules[exam.id]
@@ -278,6 +281,7 @@ async function saveModule() {
     showToast('请填写科目名称', 'error'); return
   }
   saving.value = true
+  const examTypeId = moduleForm.value.examTypeId  // 先保存，防止 closeModuleModal 清空
   try {
     const data = {
       name: moduleForm.value.name.trim(),
@@ -290,7 +294,7 @@ async function saveModule() {
       await createModule(data)
     }
     closeModuleModal()
-    await loadModules(moduleForm.value.examTypeId)
+    await loadModules(examTypeId)
     await loadExams()
     await examStore.refreshExams()
   } catch (err) {
@@ -301,7 +305,7 @@ async function saveModule() {
 }
 
 async function confirmDeleteModule(mod) {
-  if (!confirm(`确定要删除科目「${mod.name}」吗？`)) return
+  if (!await showConfirm({ message: `确定要删除科目「${mod.name}」吗？`, dangerMode: true })) return
   try {
     await deleteModule(mod.id)
     await loadModules(mod.exam_type_id)

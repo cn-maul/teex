@@ -4,8 +4,11 @@ import (
 	"fmt"
 
 	"exam-quiz/internal/cache"
+	"exam-quiz/internal/database"
 	"exam-quiz/internal/model"
 	"exam-quiz/internal/repository"
+
+	"gorm.io/gorm"
 )
 
 // GetExamTypes returns all exam types (without modules; the frontend fetches modules separately).
@@ -206,50 +209,58 @@ func ImportFullData(data FullImportData) (*FullImportResult, error) {
 		imports = append(imports, ei)
 	}
 
-	// Step 2: Create everything, fail fast on any error
-	for _, ei := range imports {
-		newExam := model.ExamType{
-			Name:   ei.Name,
-			Remark: ei.Remark,
-		}
-		if err := repository.CreateExamType(&newExam); err != nil {
-			existing, lookupErr := repository.GetExamTypeByName(ei.Name)
-			if lookupErr != nil {
-				return result, fmt.Errorf("failed to create exam type %q: %w", ei.Name, err)
+	// Step 2: Create everything inside a transaction, fail fast on any error
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		for _, ei := range imports {
+			newExam := model.ExamType{
+				Name:   ei.Name,
+				Remark: ei.Remark,
 			}
-			newExam = *existing
-		} else {
-			result.ExamTypesCreated++
-		}
-
-		for _, mi := range ei.Modules {
-			newMod := model.Module{
-				Name:       mi.Name,
-				ExamTypeID: newExam.ID,
-				Sort:       mi.Sort,
-			}
-			if err := repository.CreateModule(&newMod); err != nil {
-				existing, lookupErr := repository.GetModuleByNameAndExamID(mi.Name, newExam.ID)
-				if lookupErr != nil {
-					return result, fmt.Errorf("failed to create module %q: %w", mi.Name, err)
+			if err := tx.Create(&newExam).Error; err != nil {
+				// Exam type with this name may already exist — look it up and reuse
+				existing := &model.ExamType{}
+				if lookupErr := tx.Where("name = ?", ei.Name).First(existing).Error; lookupErr != nil {
+					return fmt.Errorf("failed to create exam type %q: %w", ei.Name, err)
 				}
-				newMod = *existing
+				newExam = *existing
 			} else {
-				result.ModulesCreated++
+				result.ExamTypesCreated++
 			}
 
-			if len(mi.Questions) > 0 {
-				for i := range mi.Questions {
-					mi.Questions[i].ModuleID = newMod.ID
+			for _, mi := range ei.Modules {
+				newMod := model.Module{
+					Name:       mi.Name,
+					ExamTypeID: newExam.ID,
+					Sort:       mi.Sort,
 				}
-				if err := repository.BatchCreateQuestions(mi.Questions); err != nil {
-					return result, fmt.Errorf("failed to create questions for module %q: %w", mi.Name, err)
+				if err := tx.Create(&newMod).Error; err != nil {
+					existing := &model.Module{}
+					if lookupErr := tx.Where("name = ? AND exam_type_id = ?", mi.Name, newExam.ID).First(existing).Error; lookupErr != nil {
+						return fmt.Errorf("failed to create module %q: %w", mi.Name, err)
+					}
+					newMod = *existing
+				} else {
+					result.ModulesCreated++
 				}
-				result.QuestionsCreated += len(mi.Questions)
+
+				if len(mi.Questions) > 0 {
+					for i := range mi.Questions {
+						mi.Questions[i].ModuleID = newMod.ID
+					}
+					if err := tx.Create(&mi.Questions).Error; err != nil {
+						return fmt.Errorf("failed to create questions for module %q: %w", mi.Name, err)
+					}
+					result.QuestionsCreated += len(mi.Questions)
+				}
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		return result, err
 	}
 
+	cache.InvalidateAll()
 	return result, nil
 }
 

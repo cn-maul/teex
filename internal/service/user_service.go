@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"log"
 
 	"exam-quiz/internal/model"
 	"exam-quiz/internal/repository"
@@ -17,7 +18,10 @@ type AuthResult struct {
 // Register creates a new user account and returns an auth token.
 func Register(username, password, nickname string) (*AuthResult, error) {
 	// 检查注册开关
-	enabled, _ := repository.GetConfig("registration_enabled")
+	enabled, err := repository.GetConfig("registration_enabled")
+	if err != nil {
+		log.Printf("WARNING: failed to read registration config: %v", err)
+	}
 	if enabled != "true" {
 		return nil, fmt.Errorf("注册已关闭，请联系管理员创建账号")
 	}
@@ -105,7 +109,10 @@ func ListUsers() ([]model.User, error) {
 
 // GetRegistrationEnabled 查询注册开关状态
 func GetRegistrationEnabled() bool {
-	val, _ := repository.GetConfig("registration_enabled")
+	val, err := repository.GetConfig("registration_enabled")
+	if err != nil {
+		log.Printf("WARNING: failed to read registration config: %v", err)
+	}
 	return val == "true"
 }
 

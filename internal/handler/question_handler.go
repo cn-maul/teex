@@ -116,6 +116,14 @@ func UpdateQuestion(c *gin.Context) {
 	}
 	question.ID = id
 
+	// Validate module_id exists if provided
+	if question.ModuleID > 0 {
+		if err := service.ValidateModuleExists(question.ModuleID); err != nil {
+			response.Error(c, 400, "指定的模块不存在")
+			return
+		}
+	}
+
 	if err := validator.ValidateQuestion(&question); err != nil {
 		response.Error(c, 400, err.Error())
 		return

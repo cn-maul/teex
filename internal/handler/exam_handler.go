@@ -37,7 +37,11 @@ func GetExamModules(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	userID := userIDRaw.(uint)
+	userID, ok := userIDRaw.(uint)
+	if !ok {
+		response.Error(c, 401, "认证信息无效")
+		return
+	}
 	modules, err := service.GetModulesByExamID(id, userID)
 	if err != nil {
 		log.Printf("GetExamModules error: %v", err)
@@ -97,6 +101,21 @@ func UpdateExamType(c *gin.Context) {
 		return
 	}
 	exam.ID = id
+
+	// Check name uniqueness (exclude current record)
+	if exam.Name != "" {
+		existing, err := service.GetExamTypeByName(exam.Name)
+		if err == nil && existing.ID != id {
+			response.Error(c, 400, "考试类型名称已存在")
+			return
+		}
+		if err != nil && err != gorm.ErrRecordNotFound {
+			log.Printf("UpdateExamType name check error: %v", err)
+			response.Error(c, 500, "操作失败，请稍后重试")
+			return
+		}
+	}
+
 	if err := service.UpdateExamType(&exam); err != nil {
 		log.Printf("UpdateExamType error: %v", err)
 		response.Error(c, 500, "操作失败，请稍后重试")
@@ -208,6 +227,38 @@ func UpdateModule(c *gin.Context) {
 		return
 	}
 	module.ID = id
+
+	// Validate exam_type_id exists if provided
+	if module.ExamTypeID > 0 {
+		if err := service.ValidateExamTypeExists(module.ExamTypeID); err != nil {
+			response.Error(c, 400, "指定的考试类型不存在")
+			return
+		}
+	}
+
+	// Check module name uniqueness under the exam type (exclude current record)
+	if module.Name != "" {
+		examTypeID := module.ExamTypeID
+		if examTypeID == 0 {
+			// If exam_type_id not changed, use the existing module's exam_type_id
+			if existingModule, err := service.GetModule(id); err == nil {
+				examTypeID = existingModule.ExamTypeID
+			}
+		}
+		if examTypeID > 0 {
+			existing, err := service.GetModuleByNameAndExamID(module.Name, examTypeID)
+			if err == nil && existing.ID != id {
+				response.Error(c, 400, "该考试类型下已存在同名模块")
+				return
+			}
+			if err != nil && err != gorm.ErrRecordNotFound {
+				log.Printf("UpdateModule name check error: %v", err)
+				response.Error(c, 500, "操作失败，请稍后重试")
+				return
+			}
+		}
+	}
+
 	if err := service.UpdateModule(&module); err != nil {
 		log.Printf("UpdateModule error: %v", err)
 		response.Error(c, 500, "操作失败，请稍后重试")
@@ -266,7 +317,11 @@ func GetExamStats(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	userID := userIDRaw.(uint)
+	userID, ok := userIDRaw.(uint)
+	if !ok {
+		response.Error(c, 401, "认证信息无效")
+		return
+	}
 	stats, err := service.GetExamStats(id, userID)
 	if err != nil {
 		log.Printf("GetExamStats error: %v", err)

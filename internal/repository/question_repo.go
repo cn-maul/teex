@@ -168,21 +168,21 @@ func GetQuestionWithModule(id uint) (*model.Question, error) {
 	return &question, err
 }
 
-// GetUnansweredQuestions 获取未做过的题目
-func GetUnansweredQuestions(moduleID uint, count int) ([]model.Question, error) {
+// GetUnansweredQuestions 获取未做过的题目（按用户过滤）
+func GetUnansweredQuestions(moduleID uint, count int, userID uint) ([]model.Question, error) {
 	var questions []model.Question
 	query := database.DB.Model(&model.Question{}).
-		Where("module_id = ? AND NOT EXISTS (SELECT 1 FROM user_answers WHERE user_answers.question_id = questions.id)", moduleID)
+		Where("module_id = ? AND NOT EXISTS (SELECT 1 FROM user_answers WHERE user_answers.question_id = questions.id AND user_answers.user_id = ?)", moduleID, userID)
 	err := query.Order("RANDOM()").Limit(count).Find(&questions).Error
 	return questions, err
 }
 
-// CountUnansweredByModule 统计某模块未做题目数
-func CountUnansweredByModule(moduleID uint) (int64, error) {
+// CountUnansweredByModule 统计某模块未做题目数（按用户过滤）
+func CountUnansweredByModule(moduleID uint, userID uint) (int64, error) {
 	var count int64
 	err := database.DB.
 		Table("questions").
-		Where("module_id = ? AND NOT EXISTS (SELECT 1 FROM user_answers WHERE user_answers.question_id = questions.id)", moduleID).
+		Where("module_id = ? AND NOT EXISTS (SELECT 1 FROM user_answers WHERE user_answers.question_id = questions.id AND user_answers.user_id = ?)", moduleID, userID).
 		Count(&count).Error
 	return count, err
 }
@@ -239,9 +239,9 @@ func GetFilteredQuestions(filter QuizFilter, count int) ([]model.Question, error
 }
 
 // GetFilteredUnansweredQuestions 按难度/标签筛选未做过的题目
-func GetFilteredUnansweredQuestions(filter QuizFilter, count int) ([]model.Question, error) {
+func GetFilteredUnansweredQuestions(filter QuizFilter, count int, userID uint) ([]model.Question, error) {
 	var questions []model.Question
-	query := database.DB.Model(&model.Question{}).Where("module_id = ? AND NOT EXISTS (SELECT 1 FROM user_answers WHERE user_answers.question_id = questions.id)", filter.ModuleID)
+	query := database.DB.Model(&model.Question{}).Where("module_id = ? AND NOT EXISTS (SELECT 1 FROM user_answers WHERE user_answers.question_id = questions.id AND user_answers.user_id = ?)", filter.ModuleID, userID)
 
 	if filter.Difficulty > 0 {
 		query = query.Where("difficulty = ?", filter.Difficulty)
@@ -286,10 +286,10 @@ func GetFilteredWrongQuestions(filter QuizFilter, count int, userID uint) ([]mod
 }
 
 // CountFilteredUnanswered 按难度/标签统计未做题目数
-func CountFilteredUnanswered(filter QuizFilter) (int64, error) {
+func CountFilteredUnanswered(filter QuizFilter, userID uint) (int64, error) {
 	var count int64
 	query := database.DB.Model(&model.Question{}).
-		Where("module_id = ? AND NOT EXISTS (SELECT 1 FROM user_answers WHERE user_answers.question_id = questions.id)", filter.ModuleID)
+		Where("module_id = ? AND NOT EXISTS (SELECT 1 FROM user_answers WHERE user_answers.question_id = questions.id AND user_answers.user_id = ?)", filter.ModuleID, userID)
 
 	if filter.Difficulty > 0 {
 		query = query.Where("difficulty = ?", filter.Difficulty)

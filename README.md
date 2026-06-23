@@ -94,7 +94,7 @@ build.bat
 
 ### 默认账户
 
-首次启动自动创建管理员账户：`admin` / `admin123`
+首次启动自动创建管理员账户：`admin` / `admin`
 
 ### 环境变量
 
@@ -103,7 +103,6 @@ build.bat
 | `PORT` | `8080` | 服务端口（端口被占用时自动递增，最多尝试 20 次） |
 | `DATA_DIR` | `.` | SQLite 数据库文件存放目录 |
 | `JWT_SECRET` | 随机 32 字节 | JWT 签名密钥（未设置则每次重启随机生成） |
-| `ADMIN_PASSWORD` | `admin123` | 默认管理员密码 |
 | `CORS_ORIGINS` | （空=允许所有） | 允许的跨域来源，逗号分隔 |
 | `GORM_LOG` | `false` | 设为 `true` 启用 GORM SQL 日志 |
 
@@ -114,8 +113,8 @@ build.bat
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | `GET` | `/api/health` | 健康检查 |
-| `POST` | `/api/auth/register` | 用户注册 `{username, password, nickname?}`（需管理员开启注册） |
-| `POST` | `/api/auth/login` | 用户登录 `{username, password}` → 返回 `{token, user}` |
+| `POST` | `/api/auth/register` | 用户注册 `{username, password, nickname?}`（需管理员开启注册，限流 5次/分） |
+| `POST` | `/api/auth/login` | 用户登录 `{username, password}` → 返回 `{token, user}`（限流 10次/分） |
 | `GET` | `/api/settings/registration` | 查询注册功能是否开启 |
 
 > 以下接口均需在请求头中携带 `Authorization: Bearer <token>`
@@ -133,9 +132,9 @@ build.bat
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | `GET` | `/api/exams` | 获取所有考试类型 |
-| `POST` | `/api/exams` | 创建考试类型（名称唯一校验） |
-| `PUT` | `/api/exams/:id` | 更新考试类型 |
-| `DELETE` | `/api/exams/:id` | 删除考试类型（级联删除模块、题目、答题记录） |
+| `POST` | `/api/exams` | 创建考试类型（名称唯一校验）🔒 需管理员 |
+| `PUT` | `/api/exams/:id` | 更新考试类型 🔒 需管理员 |
+| `DELETE` | `/api/exams/:id` | 删除考试类型（级联删除模块、题目、答题记录）🔒 需管理员 |
 | `GET` | `/api/exams/:id/modules` | 获取模块列表（含题目数 / 当前用户未做数） |
 | `GET` | `/api/exams/:id/stats` | 获取某考试类型下各模块的统计数据 |
 
@@ -143,9 +142,9 @@ build.bat
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `POST` | `/api/modules` | 创建模块（验证考试类型存在 + 名称唯一） |
-| `PUT` | `/api/modules/:id` | 更新模块 |
-| `DELETE` | `/api/modules/:id` | 删除模块（级联删除） |
+| `POST` | `/api/modules` | 创建模块（验证考试类型存在 + 名称唯一）🔒 需管理员 |
+| `PUT` | `/api/modules/:id` | 更新模块 🔒 需管理员 |
+| `DELETE` | `/api/modules/:id` | 删除模块（级联删除）🔒 需管理员 |
 
 ### 题目管理
 
@@ -153,11 +152,11 @@ build.bat
 |------|------|------|
 | `GET` | `/api/questions` | 查询题目列表（支持 `module_id`, `exam_type_id`, `type`, `difficulty`, `page`, `size` 筛选） |
 | `GET` | `/api/questions/:id` | 获取单个题目 |
-| `POST` | `/api/questions` | 创建题目（验证类型/难度/必填字段） |
-| `PUT` | `/api/questions/:id` | 更新题目 |
-| `DELETE` | `/api/questions/:id` | 删除题目（级联删除答题记录） |
-| `POST` | `/api/questions/import` | 批量导入题目（逐条校验，上限 500 条） |
-| `DELETE` | `/api/questions/batch` | 批量删除题目 `{ids: [1, 2, 3]}`（上限 500 条） |
+| `POST` | `/api/questions` | 创建题目（验证类型/难度/必填字段）🔒 需管理员 |
+| `PUT` | `/api/questions/:id` | 更新题目 🔒 需管理员 |
+| `DELETE` | `/api/questions/:id` | 删除题目（级联删除答题记录）🔒 需管理员 |
+| `POST` | `/api/questions/import` | 批量导入题目（逐条校验，上限 500 条）🔒 需管理员 |
+| `DELETE` | `/api/questions/batch` | 批量删除题目 `{ids: [1, 2, 3]}`（上限 500 条）🔒 需管理员 |
 
 ### 刷题
 
@@ -192,8 +191,8 @@ build.bat
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | `DELETE` | `/api/records` | 清空当前用户的答题记录和考试场次 |
-| `GET` | `/api/export` | 导出全部考试类型、模块和题目为 JSON |
-| `POST` | `/api/import` | 导入考试类型、模块和题目 |
+| `GET` | `/api/export` | 导出全部考试类型、模块和题目为 JSON 🔒 需管理员 |
+| `POST` | `/api/import` | 导入考试类型、模块和题目 🔒 需管理员 |
 
 ### 管理员接口（需 admin 角色）
 
@@ -238,7 +237,8 @@ teex/
 │   │   ├── question_handler.go       # 题目 CRUD + 批量导入/删除（含逐条校验）
 │   │   └── user_handler.go           # 认证/用户信息/管理员用户管理
 │   ├── middleware/
-│   │   └── auth.go                   # JWT 认证中间件 + 管理员权限中间件（含 DB 实时校验）
+│   │   ├── auth.go                   # JWT 认证中间件 + 管理员权限中间件（含 DB 实时校验）
+│   │   └── ratelimit.go              # IP 限流中间件（登录/注册/通用三级限流）
 │   ├── model/
 │   │   ├── model.go                  # 核心数据模型（ExamType, Module, Question, UserAnswer, ExamSession, SystemConfig）
 │   │   ├── user.go                   # 用户模型（密码 json:"-" 不序列化）
@@ -277,15 +277,28 @@ teex/
 │       ├── api/
 │       │   └── index.js              # Axios 封装 + token 注入 + 401 拦截 + 全部 API 函数
 │       ├── components/
+│       │   ├── ConfirmModal.vue      # 自定义确认弹窗（替代原生 confirm）
 │       │   ├── Sidebar.vue           # 侧边栏导航 + 用户信息 + 退出登录
-│       │   └── StatsPanel.vue        # 右侧统计面板（进度、正确率）
+│       │   ├── StatsPanel.vue        # 右侧统计面板（进度、正确率）
+│       │   ├── settings/
+│       │   │   ├── ProfileSection.vue     # 账户信息 + 修改昵称
+│       │   │   ├── PasswordSection.vue    # 修改密码
+│       │   │   ├── AdminSection.vue       # 管理员注册开关
+│       │   │   ├── QuizPreferenceSection.vue # 刷题偏好配置
+│       │   │   └── DataSection.vue        # 数据管理（清空记录）
+│       │   └── questions/
+│       │       ├── QuestionTable.vue      # 题目列表表格 + 分页 + 批量操作
+│       │       └── QuestionFormModal.vue  # 新增/编辑题目弹窗
 │       ├── router/
 │       │   └── index.js              # Vue Router（认证/管理员路由守卫）
 │       ├── stores/
 │       │   ├── auth.js               # 认证状态管理（token + user 持久化到 localStorage）
 │       │   └── exam.js               # 考试选择 + 刷题偏好持久化
 │       ├── utils/
-│       │   └── quiz.js               # 刷题工具函数
+│       │   ├── confirm.js            # 确认弹窗 composable（Promise 式调用）
+│       │   ├── format.js             # 日期/时长格式化公共函数
+│       │   ├── quiz.js               # 刷题工具函数
+│       │   └── toast.js              # 统一 Toast 通知系统
 │       └── views/
 │           ├── HomeView.vue          # 首页仪表盘
 │           ├── LoginView.vue         # 登录/注册表单
@@ -353,6 +366,34 @@ teex/
 | 注册控制 | 默认关闭 | 安全优先，管理员按需开启 |
 
 ## 更新日志
+
+### 2026-06
+
+#### 安全加固
+
+- 🔒 **API 权限控制** — 考试/题目/模块的创建、修改、删除接口现需管理员权限（`AdminRequired` 中间件）
+- 🔒 **JWT 签名算法校验** — `ParseToken` 验证 `alg` 为 HS256，防止算法混淆攻击
+- 🔒 **SQLite 外键约束启用** — 添加 `PRAGMA foreign_keys=ON`，数据库层面保证引用完整性
+- 🔒 **IP 限流** — 新增 Rate Limiting 中间件（登录 10次/分、注册 5次/分、通用 120次/分）
+- 🔒 **安全类型断言** — 所有 handler 中的 `userID.(uint)` 改为安全断言，防止 panic
+- 🔒 **缓存类型断言** — `cache.Get()` 改为安全断言，防止 panic
+- 🔒 **删除用户级联清理** — `DeleteUser` 在事务中先清理答题记录和考试场次再删用户
+- 🔒 **数据导入事务保护** — `ImportFullData` 包裹在事务中，失败全部回滚
+- 🔒 **批量答题关联 Session** — `SubmitBatchAnswers` 正确设置 `ExamSessionID`
+
+#### 前端优化
+
+- ✨ **自定义确认弹窗** — 替换所有原生 `window.confirm()` 为统一的 `ConfirmModal` 组件（8处）
+- ✨ **404 页面** — 未匹配路由自动跳转首页
+- ✨ **分页页码跳转** — 题目管理和历史记录支持输入页码快速跳转
+- ✨ **退出登录确认** — 侧边栏退出按钮增加二次确认
+- 🧩 **SettingsView 拆分** — 823 行拆为 5 个子组件（ProfileSection / PasswordSection / AdminSection / QuizPreferenceSection / DataSection）
+- 🧩 **QuestionManageView 拆分** — 873 行拆为 QuestionTable + QuestionFormModal 两个子组件
+- 🧩 **统一 Toast 系统** — SettingsView 的独立 toast 改为使用公共 `utils/toast.js`
+- 🧩 **公共工具函数** — 提取 `formatDate` / `formatDuration` 到 `utils/format.js`，消除重复代码
+- 🧩 **移除冗余 v-if** — Sidebar 中 admin 菜单项去掉 3 处重复的权限判断
+- ⚡ **考试模式性能优化** — QuizView 考试模式使用 IntersectionObserver + v-show，仅渲染当前±2题，100+ 题时大幅减少 DOM 节点
+- 🧹 **清理调试日志** — 移除 QuizView 中 3 处 `console.log`
 
 ### 2025-06
 

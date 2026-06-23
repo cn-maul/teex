@@ -138,14 +138,14 @@ export const updateProfile = (data) => api.put('/profile', data)
 export const changePassword = (data) => api.put('/profile/password', data)
 
 // 管理员
-export const getUsers = () => api.get('/admin/users')
-export const adminCreateUser = (data) => api.post('/admin/users', data)
-export const adminUpdateUser = (id, data) => api.put(`/admin/users/${id}`, data)
-export const adminDeleteUser = (id) => api.delete(`/admin/users/${id}`)
+export const getUsers = () => api.get('/users')
+export const adminCreateUser = (data) => api.post('/users', data)
+export const adminUpdateUser = (id, data) => api.put(`/users/${id}`, data)
+export const adminDeleteUser = (id) => api.delete(`/users/${id}`)
 
 // 系统设置
 export const getRegistrationStatus = () => api.get('/settings/registration')
-export const setRegistrationStatus = (data) => api.put('/admin/settings/registration', data)
+export const setRegistrationStatus = (data) => api.put('/settings/registration', data)
 
 export default api
 export { showToast }

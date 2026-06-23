@@ -24,7 +24,10 @@ func init() {
 			log.Fatalf("FATAL: failed to generate random JWT secret: %v", err)
 		}
 		JWTSecret = key
-		log.Println("WARNING: JWT_SECRET not set – using a random key. Tokens will be invalidated on restart.")
+		log.Println("WARNING: JWT_SECRET environment variable is not set.")
+		log.Println("  A random key has been generated for this session.")
+		log.Println("  ALL users will be logged out when the server restarts.")
+		log.Println("  Set JWT_SECRET in your environment to persist tokens across restarts.")
 	}
 }
 
@@ -54,7 +57,7 @@ func GenerateToken(userID uint, username, role string) (string, error) {
 func ParseToken(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return JWTSecret, nil
-	})
+	}, jwt.WithValidMethods([]string{"HS256"}))
 	if err != nil {
 		return nil, err
 	}

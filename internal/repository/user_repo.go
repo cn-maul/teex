@@ -3,6 +3,8 @@ package repository
 import (
 	"exam-quiz/internal/database"
 	"exam-quiz/internal/model"
+
+	"gorm.io/gorm"
 )
 
 // CreateUser 创建用户
@@ -37,9 +39,23 @@ func ListUsers() ([]model.User, error) {
 	return users, err
 }
 
-// DeleteUser 删除用户
+// DeleteUser 删除用户（事务中先清理关联数据再删除用户）
 func DeleteUser(id uint) error {
-	return database.DB.Delete(&model.User{}, id).Error
+	return database.DB.Transaction(func(tx *gorm.DB) error {
+		// 1. 删除该用户的所有答题记录
+		if err := tx.Where("user_id = ?", id).Delete(&model.UserAnswer{}).Error; err != nil {
+			return err
+		}
+		// 2. 删除该用户的所有考试场次
+		if err := tx.Where("user_id = ?", id).Delete(&model.ExamSession{}).Error; err != nil {
+			return err
+		}
+		// 3. 删除用户
+		if err := tx.Delete(&model.User{}, id).Error; err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 // UpdateUser 更新用户信息

@@ -81,7 +81,7 @@ func StartQuiz(moduleID uint, count int, mode string, difficulty int, tags strin
 	case "random":
 		questions, err = repository.GetFilteredQuestions(filter, count)
 	default:
-		questions, err = repository.GetFilteredUnansweredQuestions(filter, count)
+		questions, err = repository.GetFilteredUnansweredQuestions(filter, count, userID)
 		if err != nil {
 			return nil, 0, err
 		}

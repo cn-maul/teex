@@ -3,6 +3,7 @@ package database
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 
 	"exam-quiz/internal/model"
@@ -39,6 +40,18 @@ func Init(dbPath string) error {
 	_, err = sqlDB.Exec("PRAGMA journal_mode=WAL")
 	if err != nil {
 		return fmt.Errorf("failed to set WAL mode: %w", err)
+	}
+
+	// 启用外键约束，确保引用完整性
+	_, err = sqlDB.Exec("PRAGMA foreign_keys=ON")
+	if err != nil {
+		log.Printf("WARNING: Failed to enable foreign keys: %v", err)
+	}
+
+	// 设置 busy_timeout，避免并发写入时立即报 SQLITE_BUSY
+	_, err = sqlDB.Exec("PRAGMA busy_timeout=5000")
+	if err != nil {
+		log.Printf("WARNING: Failed to set busy_timeout: %v", err)
 	}
 
 	// 连接池配置：SQLite WAL 支持并发读 + 单写。

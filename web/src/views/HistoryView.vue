@@ -78,6 +78,15 @@
       
       <div class="pagination" v-if="total > pageSize">
         <button class="btn btn-ghost" :disabled="page <= 1" @click="loadPage(page - 1)">← 上一页</button>
+        <input
+          type="number"
+          :value="page"
+          @keyup.enter="goToPage($event.target.value)"
+          min="1"
+          :max="Math.ceil(total / pageSize)"
+          class="page-input"
+          placeholder="页码"
+        />
         <span class="page-info">第 {{ page }} / {{ Math.ceil(total / pageSize) }} 页</span>
         <button class="btn btn-ghost" :disabled="page >= Math.ceil(total / pageSize)" @click="loadPage(page + 1)">下一页 →</button>
       </div>
@@ -145,6 +154,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getSessions, getSessionAnswers } from '../api'
+import { formatDuration } from '../utils/format'
 
 const sessions = ref([])
 const total = ref(0)
@@ -176,6 +186,13 @@ async function loadSessions() {
 function loadPage(p) {
   page.value = p
   loadSessions()
+}
+
+function goToPage(val) {
+  const p = parseInt(val, 10)
+  const max = Math.ceil(total.value / pageSize)
+  if (isNaN(p) || p < 1 || p > max) return
+  loadPage(p)
 }
 
 async function viewDetail(session) {
@@ -221,15 +238,6 @@ function formatTime(dateStr) {
   return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-function formatDuration(seconds) {
-  if (seconds < 60) return `${seconds}秒`
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  if (m < 60) return s > 0 ? `${m}分${s}秒` : `${m}分钟`
-  const h = Math.floor(m / 60)
-  const rm = m % 60
-  return rm > 0 ? `${h}时${rm}分` : `${h}小时`
-}
 </script>
 
 <style scoped>
@@ -444,6 +452,23 @@ h1 {
   color: var(--text-muted);
 }
 
+.page-input {
+  width: 60px;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.85rem;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.page-input:focus {
+  border-color: var(--primary);
+}
+
 /* Modal */
 .modal-overlay {
   position: fixed;
@@ -457,7 +482,7 @@ h1 {
 }
 
 .modal-content {
-  background: white;
+  background: var(--bg-card);
   border-radius: 16px;
   width: 100%;
   max-width: 700px;

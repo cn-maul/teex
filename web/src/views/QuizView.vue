@@ -45,36 +45,49 @@
       </div>
 
       <div class="exam-questions">
-        <div
-          v-for="(q, idx) in questions"
-          :key="q.id"
-          class="exam-question-card"
-          :class="{ 'exam-answered': examSelectedAnswers[idx] }"
-        >
-          <div class="eq-header">
-            <span class="eq-number">{{ idx + 1 }}</span>
-            <span class="question-type-badge">{{ getTypeLabel(q.type) }}</span>
-            <div class="difficulty">
-              <span v-for="i in 5" :key="i" class="star" :class="{ filled: i <= q.difficulty }">★</span>
+        <template v-for="(q, idx) in questions" :key="q.id">
+          <div
+            v-show="Math.abs(idx - currentExamIndex) <= 10 || examSelectedAnswers[idx]"
+            class="exam-question-card"
+            :class="{ 'exam-answered': examSelectedAnswers[idx] }"
+            :data-exam-idx="idx"
+            :ref="el => { if (el) examQuestionRefs[idx] = el }"
+          >
+            <div class="eq-header">
+              <span class="eq-number">{{ idx + 1 }}</span>
+              <span class="question-type-badge">{{ getTypeLabel(q.type) }}</span>
+              <div class="difficulty">
+                <span v-for="i in 5" :key="i" class="star" :class="{ filled: i <= q.difficulty }">★</span>
+              </div>
+            </div>
+
+            <div class="eq-content">{{ q.content || '（题目内容加载失败）' }}</div>
+
+            <div v-if="q.type === 'fill'" class="fill-input-wrapper">
+              <input
+                :value="examSelectedAnswers[idx] || ''"
+                @input="examSelectedAnswers = { ...examSelectedAnswers, [idx]: $event.target.value }"
+                type="text"
+                class="fill-input"
+                placeholder="请输入答案"
+                :disabled="showExamResults"
+              />
+            </div>
+            <div v-else class="options">
+              <div
+                v-for="(option, oi) in parseOptions(q.options)"
+                :key="oi"
+                class="option"
+                :class="{ selected: examSelectedAnswers[idx] === getOptionLetter(option) }"
+                @click="selectExamOption(idx, option)"
+              >
+                <span class="option-letter">{{ getOptionLetter(option) }}</span>
+                <span class="option-text">{{ getOptionText(option) }}</span>
+                <svg v-if="examSelectedAnswers[idx] === getOptionLetter(option)" class="option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </div>
             </div>
           </div>
-
-          <div class="eq-content">{{ q.content || '（题目内容加载失败）' }}</div>
-
-          <div class="options">
-            <div
-              v-for="(option, oi) in parseOptions(q.options)"
-              :key="oi"
-              class="option"
-              :class="{ selected: examSelectedAnswers[idx] === getOptionLetter(option) }"
-              @click="selectExamOption(idx, option)"
-            >
-              <span class="option-letter">{{ getOptionLetter(option) }}</span>
-              <span class="option-text">{{ getOptionText(option) }}</span>
-              <svg v-if="examSelectedAnswers[idx] === getOptionLetter(option)" class="option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            </div>
-          </div>
-        </div>
+        </template>
       </div>
 
       <div class="exam-actions">
@@ -162,8 +175,8 @@
               class="analysis-option"
               :class="{
                 'aopt-selected': examSelectedAnswers[idx] === getOptionLetter(option),
-                'aopt-correct': getOptionLetter(option) === q.answer,
-                'aopt-wrong': examSelectedAnswers[idx] === getOptionLetter(option) && getOptionLetter(option) !== q.answer
+                'aopt-correct': q.type === 'multi' ? (q.answer || '').split(',').map(s => s.trim()).includes(getOptionLetter(option)) : getOptionLetter(option) === q.answer,
+                'aopt-wrong': examSelectedAnswers[idx] === getOptionLetter(option) && !(q.type === 'multi' ? (q.answer || '').split(',').map(s => s.trim()).includes(getOptionLetter(option)) : getOptionLetter(option) === q.answer)
               }"
             >
               <span class="aopt-letter">{{ getOptionLetter(option) }}</span>
@@ -281,6 +294,18 @@
           <p>{{ currentQuestion.content || '（题目内容加载失败）' }}</p>
         </div>
 
+        <!-- 填空题输入框 -->
+        <div v-if="currentQuestion.type === 'fill'" class="fill-input-wrapper">
+          <input
+            v-model="fillAnswer"
+            type="text"
+            class="fill-input"
+            placeholder="请输入答案"
+            @keyup.enter="showFeedback ? nextQuestion() : submitSingleAnswer()"
+            :disabled="showFeedback"
+          />
+        </div>
+
         <div class="options">
           <div
             v-for="(option, index) in parsedOptions"
@@ -312,7 +337,7 @@
           <button
             v-if="!showFeedback"
             class="btn btn-primary btn-lg"
-            :disabled="!selectedOption"
+            :disabled="currentQuestion.type === 'fill' ? !fillAnswer.trim() : !selectedOption"
             @click="submitSingleAnswer"
           >
             提交答案
@@ -333,11 +358,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { startQuiz, submitAnswer as apiSubmitAnswer, submitBatchAnswers } from '../api'
 import { useExamStore } from '../stores/exam'
 import { getTypeLabel, parseOptions, getOptionLetter, getOptionText } from '../utils/quiz'
+import { showToast } from '../utils/toast'
 
 const route = useRoute()
 const router = useRouter()
@@ -363,6 +389,7 @@ const correctCount = ref(0)
 const wrongCount = ref(0)
 const sessionId = ref(null)
 const questionStartTime = ref(0)
+const fillAnswer = ref('')
 // 解析模式累积的答题结果（用于终页解析）
 const analysisResults = ref([])
 
@@ -372,6 +399,9 @@ const examResults = ref([])          // AnswerResult[]
 const showExamResults = ref(false)
 const examSessionId = ref(null)
 const examStartTime = ref(0)
+const currentExamIndex = ref(0)      // 当前可视题目索引（用于虚拟渲染优化）
+const examQuestionRefs = {}          // 题目 DOM 引用
+let examObserver = null              // IntersectionObserver 实例
 
 // ====== 计算属性 ======
 
@@ -400,10 +430,9 @@ const answeredCount = computed(() => {
 })
 
 const examAccuracy = computed(() => {
-  const answered = examResults.value.filter(r => r !== undefined)
-  if (answered.length === 0) return 0
-  const correct = answered.filter(r => r.is_correct).length
-  return Math.round((correct / answered.length) * 100)
+  if (questions.value.length === 0) return 0
+  const correct = examResults.value.filter(r => r && r.is_correct).length
+  return Math.round((correct / questions.value.length) * 100)
 })
 
 const examCorrect = computed(() => {
@@ -433,6 +462,7 @@ watch(() => route.params.moduleId, (newId, oldId) => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
+  disconnectExamObserver()
 })
 
 // ====== 键盘快捷键 ======
@@ -448,16 +478,14 @@ function handleKeydown(e) {
     if (['a', 'b', 'c', 'd', 'e'].includes(key) && !finished.value) {
       const letterMap = { a: 'A', b: 'B', c: 'C', d: 'D', e: 'E' }
       const letter = letterMap[key]
-      // 找到第一个未选中的题目，选择对应选项
-      for (let i = 0; i < questions.value.length; i++) {
-        if (!examSelectedAnswers.value[i]) {
-          const q = questions.value[i]
-          const options = parseOptions(q.options)
-          const option = options.find(opt => getOptionLetter(opt) === letter)
-          if (option) {
-            selectExamOption(i, option)
-          }
-          break
+      // 使用当前可视题目（由 IntersectionObserver 追踪的 currentExamIndex）
+      const i = currentExamIndex.value
+      if (i >= 0 && i < questions.value.length && !examSelectedAnswers.value[i]) {
+        const q = questions.value[i]
+        const options = parseOptions(q.options)
+        const option = options.find(opt => getOptionLetter(opt) === letter)
+        if (option) {
+          selectExamOption(i, option)
         }
       }
       return
@@ -504,6 +532,9 @@ function getDuration() {
 async function loadQuestions() {
   loading.value = true
   loadError.value = ''
+  for (const key in examQuestionRefs) {
+    delete examQuestionRefs[key]
+  }
   try {
     const mode = route.query.mode || 'default'
     const count = examStore.settings.quizCount || 10
@@ -514,16 +545,13 @@ async function loadQuestions() {
       loading.value = false
       return
     }
-    console.log('[QuizView] loadQuestions called', { moduleId, count, mode, difficulty })
     const res = await startQuiz({
       module_id: moduleId,
       count,
       mode,
       difficulty
     })
-    console.log('[QuizView] API response:', res.data)
     questions.value = res.data.data || []
-    console.log('[QuizView] questions set, length:', questions.value.length, 'quizMode:', quizMode.value)
     sessionId.value = res.data.session_id || null
     examSessionId.value = res.data.session_id || null
     currentIndex.value = 0
@@ -532,12 +560,18 @@ async function loadQuestions() {
     finished.value = false
     showFeedback.value = false
     selectedOption.value = ''
+    fillAnswer.value = ''
     examSelectedAnswers.value = {}
     examResults.value = []
     showExamResults.value = false
     analysisResults.value = []
+    currentExamIndex.value = 0
     startTimer()
     examStartTime.value = Date.now()
+    // 考试模式下设置 IntersectionObserver 追踪可视题目
+    if (quizMode.value === 'exam') {
+      nextTick(() => setupExamObserver())
+    }
   } catch (err) {
     console.error('[QuizView] Failed to start quiz:', err)
     console.error('[QuizView] Error response:', err.response?.data)
@@ -564,6 +598,7 @@ function isSelected(option) {
 
 function selectOption(option) {
   if (finished.value || showFeedback.value) return
+  if (currentQuestion.value.type === 'fill') return
   const letter = getOptionLetter(option)
   selectedOption.value = letter
 }
@@ -582,11 +617,12 @@ function getOptionClass(option) {
 }
 
 async function submitSingleAnswer() {
-  if (!selectedOption.value) return
+  const userInput = currentQuestion.value.type === 'fill' ? fillAnswer.value.trim() : selectedOption.value
+  if (!userInput) return
   try {
     const res = await apiSubmitAnswer({
       question_id: currentQuestion.value.id,
-      user_input: selectedOption.value,
+      user_input: userInput,
       duration: getDuration(),
       session_id: sessionId.value || 0
     })
@@ -598,6 +634,7 @@ async function submitSingleAnswer() {
     analysisResults.value[currentIndex.value] = res.data.data
   } catch (err) {
     console.error('Failed to submit answer:', err)
+    showToast('提交失败，请检查网络后重试', 'error')
   }
 }
 
@@ -605,6 +642,7 @@ function nextQuestion() {
   if (currentIndex.value < questions.value.length - 1) {
     currentIndex.value++
     selectedOption.value = ''
+    fillAnswer.value = ''
     showFeedback.value = false
     isCorrect.value = false
     startTimer()
@@ -619,6 +657,49 @@ function getAnalysisSelected(idx) {
   if (!result) return ''
   return result.user_input || ''
 }
+
+// ====== 考试模式可视范围优化 ======
+
+function setupExamObserver() {
+  disconnectExamObserver()
+  if (!window.IntersectionObserver) return
+  examObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          const idx = parseInt(entry.target.dataset.examIdx, 10)
+          if (!isNaN(idx)) {
+            currentExamIndex.value = idx
+          }
+        }
+      }
+    },
+    { rootMargin: '-10% 0px -60% 0px' }
+  )
+  nextTick(() => {
+    for (const idx in examQuestionRefs) {
+      const el = examQuestionRefs[idx]
+      if (el) examObserver.observe(el)
+    }
+  })
+}
+
+function disconnectExamObserver() {
+  if (examObserver) {
+    examObserver.disconnect()
+    examObserver = null
+  }
+}
+
+watch(currentExamIndex, () => {
+  nextTick(() => {
+    if (!examObserver) return
+    for (const idx in examQuestionRefs) {
+      const el = examQuestionRefs[idx]
+      if (el) examObserver.observe(el)
+    }
+  })
+})
 
 // ====== 考试模式逻辑 ======
 
@@ -638,15 +719,18 @@ function selectExamOption(idx, option) {
 async function submitExam() {
   if (answeredCount.value === 0) return
 
-  // 构建批量提交数据
+  // 构建批量提交数据（将总时间均分给每道已答题）
   const answers = []
+  const totalTime = Math.floor((Date.now() - examStartTime.value) / 1000)
+  const perQuestionTime = Math.max(1, Math.floor(totalTime / answeredCount.value))
+
   for (const [idx, userInput] of Object.entries(examSelectedAnswers.value)) {
     const q = questions.value[parseInt(idx)]
     if (!q) continue
     answers.push({
       question_id: q.id,
       user_input: userInput,
-      duration: Math.floor((Date.now() - examStartTime.value) / 1000)
+      duration: perQuestionTime
     })
   }
 
@@ -667,9 +751,11 @@ async function submitExam() {
       orderedResults[i] = result
     }
     examResults.value = orderedResults
+    disconnectExamObserver()
     showExamResults.value = true
   } catch (err) {
     console.error('Failed to submit batch answers:', err)
+    showToast('交卷失败，请检查网络后重试', 'error')
   }
 }
 
@@ -1462,5 +1548,37 @@ async function restartQuiz() {
     flex-direction: column;
     gap: 0.25rem;
   }
+}
+
+/* Fill type input */
+.fill-input-wrapper {
+  margin-bottom: 1.5rem;
+}
+
+.fill-input {
+  width: 100%;
+  padding: 0.85rem 1.1rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  font-size: 0.95rem;
+  color: var(--text);
+  background: var(--bg-card);
+  outline: none;
+  transition: var(--transition);
+  box-sizing: border-box;
+}
+
+.fill-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.fill-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.fill-input::placeholder {
+  color: var(--text-muted);
 }
 </style>

@@ -57,7 +57,9 @@ func SubmitAnswer(questionID uint, userInput string, duration int, sessionID uin
 						}
 						totalDuration += a.Duration
 					}
-					_ = repository.FinishSession(sessionID, correctCount, totalDuration, userID)
+					if finishErr := repository.FinishSession(sessionID, correctCount, totalDuration, userID); finishErr != nil {
+						log.Printf("WARNING: auto-finish session %d failed: %v", sessionID, finishErr)
+					}
 				}
 			}
 		}
@@ -112,7 +114,7 @@ func sortedCompare(a, b string) bool {
 }
 
 // SubmitBatchAnswers 批量提交答案（考试模式交卷用）
-func SubmitBatchAnswers(answers []BatchAnswerItem, userID uint) ([]AnswerResult, error) {
+func SubmitBatchAnswers(answers []BatchAnswerItem, sessionID uint, userID uint) ([]AnswerResult, error) {
 	if len(answers) == 0 {
 		return nil, nil
 	}
@@ -149,11 +151,12 @@ func SubmitBatchAnswers(answers []BatchAnswerItem, userID uint) ([]AnswerResult,
 		})
 
 		userAnswers = append(userAnswers, model.UserAnswer{
-			QuestionID: a.QuestionID,
-			UserInput:  a.UserInput,
-			IsCorrect:  isCorrect,
-			Duration:   a.Duration,
-			UserID:     userID,
+			QuestionID:    a.QuestionID,
+			ExamSessionID: sessionID,
+			UserInput:     a.UserInput,
+			IsCorrect:     isCorrect,
+			Duration:      a.Duration,
+			UserID:        userID,
 		})
 	}
 
