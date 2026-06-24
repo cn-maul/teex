@@ -3,7 +3,7 @@ package exam_quiz
 import (
 	"embed"
 	"io/fs"
-	"log"
+	"log/slog"
 )
 
 //go:embed web/dist
@@ -13,7 +13,7 @@ var webDist embed.FS
 func GetDistFS() fs.FS {
 	distFS, err := fs.Sub(webDist, "web/dist")
 	if err != nil {
-		log.Printf("warning: failed to get web dist fs: %v", err)
+		slog.Warn("failed to get web dist fs", "error", err)
 		return nil
 	}
 	return distFS

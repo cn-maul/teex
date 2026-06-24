@@ -1,7 +1,8 @@
 package handler
 
 import (
-	"log"
+	"errors"
+	"log/slog"
 
 	"exam-quiz/internal/model"
 	"exam-quiz/internal/response"
@@ -16,8 +17,8 @@ import (
 func GetExamTypes(c *gin.Context) {
 	exams, err := service.GetExamTypes()
 	if err != nil {
-		log.Printf("GetExamTypes error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("get exam types failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, exams)
@@ -31,21 +32,14 @@ func GetExamModules(c *gin.Context) {
 		return
 	}
 
-	userIDRaw, exists := c.Get("user_id")
-	if !exists {
-		response.Error(c, 401, "未登录")
-		c.Abort()
-		return
-	}
-	userID, ok := userIDRaw.(uint)
+	userID, ok := validator.GetUserID(c)
 	if !ok {
-		response.Error(c, 401, "认证信息无效")
 		return
 	}
 	modules, err := service.GetModulesByExamID(id, userID)
 	if err != nil {
-		log.Printf("GetExamModules error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("get exam modules failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, modules)
@@ -65,13 +59,13 @@ func CreateExamType(c *gin.Context) {
 	}
 
 	if err := service.CheckExamTypeNameUnique(exam.Name); err != nil {
-		response.Error(c, 400, err.Error())
+		response.HandleError(c, err)
 		return
 	}
 
 	if err := service.CreateExamType(&exam); err != nil {
-		log.Printf("CreateExamType error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("create exam type failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.Created(c, exam)
@@ -87,11 +81,7 @@ func UpdateExamType(c *gin.Context) {
 
 	// Check existence
 	if err := service.ValidateExamTypeExists(id); err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.Error(c, 404, "考试类型不存在")
-			return
-		}
-		response.Error(c, 500, "操作失败，请稍后重试")
+		response.HandleError(c, err)
 		return
 	}
 
@@ -109,16 +99,16 @@ func UpdateExamType(c *gin.Context) {
 			response.Error(c, 400, "考试类型名称已存在")
 			return
 		}
-		if err != nil && err != gorm.ErrRecordNotFound {
-			log.Printf("UpdateExamType name check error: %v", err)
-			response.Error(c, 500, "操作失败，请稍后重试")
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			slog.Error("update exam type name check failed", "error", err)
+			response.HandleError(c, err)
 			return
 		}
 	}
 
 	if err := service.UpdateExamType(&exam); err != nil {
-		log.Printf("UpdateExamType error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("update exam type failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, exam)
@@ -134,28 +124,19 @@ func DeleteExamType(c *gin.Context) {
 
 	// Check existence
 	if err := service.ValidateExamTypeExists(id); err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.Error(c, 404, "考试类型不存在")
-			return
-		}
-		response.Error(c, 500, "操作失败，请稍后重试")
+		response.HandleError(c, err)
 		return
 	}
 
 	// Count cascade-deletion impact BEFORE the actual delete.
-	// Note: counts are computed outside the transaction used by
-	// service.DeleteExamType, so in theory a concurrent insert
-	// between the count and the delete could make them slightly
-	// stale.  This is acceptable for a stats/audit response and
-	// avoids coupling the handler to the repository transaction.
 	modules, questions, answers, countErr := service.CountAffectedByExamType(id)
 	if countErr != nil {
-		log.Printf("CountAffectedByExamType error: %v", countErr)
+		slog.Error("count affected by exam type failed", "error", countErr)
 	}
 
 	if err := service.DeleteExamType(id); err != nil {
-		log.Printf("DeleteExamType error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("delete exam type failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, gin.H{
@@ -181,23 +162,19 @@ func CreateModule(c *gin.Context) {
 
 	// Validate exam type exists
 	if err := service.ValidateExamTypeExists(module.ExamTypeID); err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.Error(c, 404, "考试类型不存在")
-			return
-		}
-		response.Error(c, 500, "操作失败，请稍后重试")
+		response.HandleError(c, err)
 		return
 	}
 
 	// Check module name uniqueness under the exam type
 	if err := service.CheckModuleNameUnique(module.Name, module.ExamTypeID); err != nil {
-		response.Error(c, 400, err.Error())
+		response.HandleError(c, err)
 		return
 	}
 
 	if err := service.CreateModule(&module); err != nil {
-		log.Printf("CreateModule error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("create module failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.Created(c, module)
@@ -213,11 +190,7 @@ func UpdateModule(c *gin.Context) {
 
 	// Check existence
 	if err := service.ValidateModuleExists(id); err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.Error(c, 404, "模块不存在")
-			return
-		}
-		response.Error(c, 500, "操作失败，请稍后重试")
+		response.HandleError(c, err)
 		return
 	}
 
@@ -231,7 +204,7 @@ func UpdateModule(c *gin.Context) {
 	// Validate exam_type_id exists if provided
 	if module.ExamTypeID > 0 {
 		if err := service.ValidateExamTypeExists(module.ExamTypeID); err != nil {
-			response.Error(c, 400, "指定的考试类型不存在")
+			response.HandleError(c, err)
 			return
 		}
 	}
@@ -251,17 +224,17 @@ func UpdateModule(c *gin.Context) {
 				response.Error(c, 400, "该考试类型下已存在同名模块")
 				return
 			}
-			if err != nil && err != gorm.ErrRecordNotFound {
-				log.Printf("UpdateModule name check error: %v", err)
-				response.Error(c, 500, "操作失败，请稍后重试")
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				slog.Error("update module name check failed", "error", err)
+				response.HandleError(c, err)
 				return
 			}
 		}
 	}
 
 	if err := service.UpdateModule(&module); err != nil {
-		log.Printf("UpdateModule error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("update module failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, module)
@@ -277,23 +250,19 @@ func DeleteModule(c *gin.Context) {
 
 	// Check existence
 	if err := service.ValidateModuleExists(id); err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.Error(c, 404, "模块不存在")
-			return
-		}
-		response.Error(c, 500, "操作失败，请稍后重试")
+		response.HandleError(c, err)
 		return
 	}
 
 	// Count cascade-deletion impact
 	questions, answers, countErr := service.CountAffectedByModule(id)
 	if countErr != nil {
-		log.Printf("CountAffectedByModule error: %v", countErr)
+		slog.Error("count affected by module failed", "error", countErr)
 	}
 
 	if err := service.DeleteModule(id); err != nil {
-		log.Printf("DeleteModule error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("delete module failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, gin.H{
@@ -311,21 +280,14 @@ func GetExamStats(c *gin.Context) {
 		return
 	}
 
-	userIDRaw, exists := c.Get("user_id")
-	if !exists {
-		response.Error(c, 401, "未登录")
-		c.Abort()
-		return
-	}
-	userID, ok := userIDRaw.(uint)
+	userID, ok := validator.GetUserID(c)
 	if !ok {
-		response.Error(c, 401, "认证信息无效")
 		return
 	}
 	stats, err := service.GetExamStats(id, userID)
 	if err != nil {
-		log.Printf("GetExamStats error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("get exam stats failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, stats)
@@ -340,8 +302,8 @@ func HealthCheck(c *gin.Context) {
 func ExportData(c *gin.Context) {
 	data, err := service.ExportAllData()
 	if err != nil {
-		log.Printf("ExportData error: %v", err)
-		response.Error(c, 500, "导出失败，请稍后重试")
+		slog.Error("export data failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, data)
@@ -356,8 +318,8 @@ func ImportFullData(c *gin.Context) {
 	}
 	result, err := service.ImportFullData(data)
 	if err != nil {
-		log.Printf("ImportFullData error: %v", err)
-		response.Error(c, 500, "导入失败，请稍后重试")
+		slog.Error("import full data failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, result)

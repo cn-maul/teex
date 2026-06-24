@@ -1,11 +1,11 @@
 package service
 
 import (
-	"fmt"
-	"log"
+	"log/slog"
 	"sort"
 	"strings"
 
+	"exam-quiz/internal/apperr"
 	"exam-quiz/internal/cache"
 	"exam-quiz/internal/model"
 	"exam-quiz/internal/repository"
@@ -24,7 +24,7 @@ func SubmitAnswer(questionID uint, userInput string, duration int, sessionID uin
 	// 1. 获取题目
 	question, err := repository.GetQuestion(questionID)
 	if err != nil {
-		return nil, fmt.Errorf("question not found: %w", err)
+		return nil, apperr.NotFound("题目不存在")
 	}
 
 	// 2. 比对答案
@@ -40,26 +40,39 @@ func SubmitAnswer(questionID uint, userInput string, duration int, sessionID uin
 		UserID:        userID,
 	}
 	if err := repository.SaveAnswer(answer); err != nil {
-		return nil, fmt.Errorf("failed to save answer: %w", err)
+		return nil, apperr.Wrapf(500, "保存答案失败", err)
 	}
 
 	// Auto-finish the session when all questions have been answered.
 	// Optimized: count first (lightweight), only fetch full session on last answer.
 	if sessionID > 0 {
-		if answerCount, countErr := repository.CountSessionAnswers(sessionID); countErr == nil {
-			if session, sessErr := repository.GetSessionByID(sessionID, userID); sessErr == nil && session.TotalCount > 0 && answerCount >= int64(session.TotalCount) {
-				if answers, aErr := repository.GetSessionAnswersRaw(sessionID); aErr == nil {
-					correctCount := 0
-					totalDuration := 0
-					for _, a := range answers {
-						if a.IsCorrect {
-							correctCount++
-						}
-						totalDuration += a.Duration
+		// Verify session belongs to the user and is not finished
+		session, sessErr := repository.GetSessionByID(sessionID, userID)
+		if sessErr != nil {
+			return nil, apperr.NotFound("考试场次不存在或无权访问")
+		}
+		if session.FinishedAt != nil {
+			// Session already finished — still return the answer result
+			// but skip auto-finish logic
+			return &AnswerResult{
+				IsCorrect:     isCorrect,
+				CorrectAnswer: question.Answer,
+				Analysis:      question.Analysis,
+				UserInput:     userInput,
+			}, nil
+		}
+		if answerCount, countErr := repository.CountSessionAnswers(sessionID); countErr == nil && session.TotalCount > 0 && answerCount >= int64(session.TotalCount) {
+			if answers, aErr := repository.GetSessionAnswersRaw(sessionID); aErr == nil {
+				correctCount := 0
+				totalDuration := 0
+				for _, a := range answers {
+					if a.IsCorrect {
+						correctCount++
 					}
-					if finishErr := repository.FinishSession(sessionID, correctCount, totalDuration, userID); finishErr != nil {
-						log.Printf("WARNING: auto-finish session %d failed: %v", sessionID, finishErr)
-					}
+					totalDuration += a.Duration
+				}
+				if finishErr := repository.FinishSession(sessionID, correctCount, totalDuration, userID); finishErr != nil {
+					slog.Warn("auto-finish session failed", "session_id", sessionID, "error", finishErr)
 				}
 			}
 		}
@@ -128,7 +141,7 @@ func SubmitBatchAnswers(answers []BatchAnswerItem, sessionID uint, userID uint) 
 	// 批量查询题目
 	questionMap, err := repository.BatchGetQuestions(ids)
 	if err != nil {
-		return nil, fmt.Errorf("failed to batch get questions: %w", err)
+		return nil, apperr.Wrapf(500, "查询题目失败", err)
 	}
 
 	// 内存中比对答案
@@ -138,7 +151,7 @@ func SubmitBatchAnswers(answers []BatchAnswerItem, sessionID uint, userID uint) 
 	for _, a := range answers {
 		question, ok := questionMap[a.QuestionID]
 		if !ok {
-			return nil, fmt.Errorf("question %d not found", a.QuestionID)
+			return nil, apperr.NotFound("题目不存在")
 		}
 
 		isCorrect := compareAnswers(question.Answer, a.UserInput, question.Type)
@@ -162,7 +175,7 @@ func SubmitBatchAnswers(answers []BatchAnswerItem, sessionID uint, userID uint) 
 
 	// 批量写入
 	if err := repository.BatchCreateAnswers(userAnswers); err != nil {
-		return nil, fmt.Errorf("failed to batch create answers: %w", err)
+		return nil, apperr.Wrapf(500, "保存答案失败", err)
 	}
 
 	// 清除所有相关模块的统计缓存
@@ -193,9 +206,13 @@ func SubmitBatchAnswersWithSession(sessionID uint, answers []BatchAnswerItem, us
 	// Verify session belongs to the user
 	session, err := repository.GetSessionByID(sessionID, userID)
 	if err != nil {
-		return nil, fmt.Errorf("session not found or access denied: %w", err)
+		return nil, apperr.NotFound("考试场次不存在或无权访问")
 	}
-	_ = session // session verified
+
+	// 防止对已结束的场次重复提交
+	if session.FinishedAt != nil {
+		return nil, apperr.Conflict("该考试场次已结束，无法再次提交")
+	}
 
 	// 1. 收集所有 question_id
 	ids := make([]uint, len(answers))
@@ -206,7 +223,7 @@ func SubmitBatchAnswersWithSession(sessionID uint, answers []BatchAnswerItem, us
 	// 2. 批量查询题目
 	questionMap, err := repository.BatchGetQuestions(ids)
 	if err != nil {
-		return nil, fmt.Errorf("failed to batch get questions: %w", err)
+		return nil, apperr.Wrapf(500, "查询题目失败", err)
 	}
 
 	// 3. 在内存中比对答案并构建批量写入数据
@@ -218,7 +235,7 @@ func SubmitBatchAnswersWithSession(sessionID uint, answers []BatchAnswerItem, us
 	for _, a := range answers {
 		question, ok := questionMap[a.QuestionID]
 		if !ok {
-			return nil, fmt.Errorf("question %d not found", a.QuestionID)
+			return nil, apperr.NotFound("题目不存在")
 		}
 
 		isCorrect := compareAnswers(question.Answer, a.UserInput, question.Type)
@@ -247,13 +264,13 @@ func SubmitBatchAnswersWithSession(sessionID uint, answers []BatchAnswerItem, us
 
 	// 4. 批量写入答题记录
 	if err := repository.BatchCreateAnswers(userAnswers); err != nil {
-		return nil, fmt.Errorf("failed to batch create answers: %w", err)
+		return nil, apperr.Wrapf(500, "保存答案失败", err)
 	}
 
 	// 5. 结束考试场次
 	if sessionID > 0 {
 		if err := repository.FinishSession(sessionID, correctCount, totalDuration, userID); err != nil {
-			log.Printf("WARNING: failed to finish session %d: %v", sessionID, err)
+			slog.Warn("failed to finish session", "session_id", sessionID, "error", err)
 		}
 	}
 
@@ -287,4 +304,14 @@ func GetSessionAnswers(sessionID uint, userID uint) ([]model.UserAnswer, error) 
 // GetSessionAnswersPaginated returns paginated answers for a session (with user ownership check).
 func GetSessionAnswersPaginated(sessionID uint, page, size int, userID uint) ([]model.UserAnswer, int64, error) {
 	return repository.GetSessionAnswersPaginated(sessionID, page, size, userID)
+}
+
+// GetDashboardStats 获取仪表盘统计数据
+func GetDashboardStats(userID uint) (*repository.DashboardStats, error) {
+	return repository.GetDashboardStats(userID)
+}
+
+// GetAdminDashboardStats 获取管理员全局数据看板
+func GetAdminDashboardStats() (*repository.AdminDashboardStats, error) {
+	return repository.GetAdminDashboardStats()
 }

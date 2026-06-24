@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -24,10 +25,7 @@ func init() {
 			log.Fatalf("FATAL: failed to generate random JWT secret: %v", err)
 		}
 		JWTSecret = key
-		log.Println("WARNING: JWT_SECRET environment variable is not set.")
-		log.Println("  A random key has been generated for this session.")
-		log.Println("  ALL users will be logged out when the server restarts.")
-		log.Println("  Set JWT_SECRET in your environment to persist tokens across restarts.")
+		slog.Warn("JWT_SECRET environment variable is not set; a random key has been generated for this session. ALL users will be logged out when the server restarts. Set JWT_SECRET in your environment to persist tokens across restarts.")
 	}
 }
 

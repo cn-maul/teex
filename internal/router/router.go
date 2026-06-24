@@ -78,13 +78,14 @@ func Setup() *gin.Engine {
 		api.GET("/questions", middleware.AuthRequired(), handler.ListQuestions)
 		api.GET("/questions/:id", middleware.AuthRequired(), handler.GetQuestion)
 
-		// 刷题
-		api.POST("/quiz/start", middleware.AuthRequired(), handler.StartQuiz)
-		api.POST("/quiz/answer", middleware.AuthRequired(), handler.SubmitAnswer)
-		api.POST("/quiz/submit-batch", middleware.AuthRequired(), handler.SubmitBatchAnswers)
+		// 刷题（仅普通用户）
+		api.POST("/quiz/start", middleware.AuthRequired(), middleware.UserOnly(), handler.StartQuiz)
+		api.POST("/quiz/answer", middleware.AuthRequired(), middleware.UserOnly(), handler.SubmitAnswer)
+		api.POST("/quiz/submit-batch", middleware.AuthRequired(), middleware.UserOnly(), handler.SubmitBatchAnswers)
 
 		// 统计
 		api.GET("/stats", middleware.AuthRequired(), handler.GetStats)
+		api.GET("/stats/dashboard", middleware.AuthRequired(), handler.GetDashboardStats)
 		api.GET("/stats/module/:id", middleware.AuthRequired(), handler.GetModuleStats)
 
 		// 考试场次
@@ -92,8 +93,8 @@ func Setup() *gin.Engine {
 		api.GET("/sessions/:id", middleware.AuthRequired(), handler.GetSession)
 		api.GET("/sessions/:id/answers", middleware.AuthRequired(), handler.GetSessionAnswers)
 
-		// 数据管理（普通用户）
-		api.DELETE("/records", middleware.AuthRequired(), handler.ClearAllRecords)
+		// 数据管理（仅普通用户）
+		api.DELETE("/records", middleware.AuthRequired(), middleware.UserOnly(), handler.ClearAllRecords)
 
 		// 系统设置
 		api.GET("/settings/registration", handler.GetRegistrationStatus)
@@ -127,6 +128,9 @@ func Setup() *gin.Engine {
 
 		// 系统设置（管理员）
 		api.PUT("/settings/registration", middleware.AuthRequired(), middleware.AdminRequired(), handler.SetRegistrationStatus)
+
+		// 管理员数据看板
+		api.GET("/admin/dashboard", middleware.AuthRequired(), middleware.AdminRequired(), handler.GetAdminDashboardStats)
 	}
 
 	return r

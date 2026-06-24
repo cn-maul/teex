@@ -1,8 +1,7 @@
 package service
 
 import (
-	"fmt"
-
+	"exam-quiz/internal/apperr"
 	"exam-quiz/internal/cache"
 	"exam-quiz/internal/model"
 	"exam-quiz/internal/repository"
@@ -105,7 +104,7 @@ func StartQuiz(moduleID uint, count int, mode string, difficulty int, tags strin
 
 	// 检查是否有可用题目
 	if len(questions) == 0 {
-		return nil, 0, fmt.Errorf("该模块暂无题目")
+		return nil, 0, apperr.BadRequest("该模块暂无题目")
 	}
 
 	// 创建考试场次
@@ -117,7 +116,7 @@ func StartQuiz(moduleID uint, count int, mode string, difficulty int, tags strin
 		StartedAt:  time.Now(),
 	}
 	if createErr := repository.CreateSession(session); createErr != nil {
-		return nil, 0, fmt.Errorf("创建考试场次失败: %w", createErr)
+		return nil, 0, apperr.Wrapf(500, "创建考试场次失败", createErr)
 	}
 
 	return questions, session.ID, nil

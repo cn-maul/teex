@@ -99,7 +99,8 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getUsers, adminCreateUser, adminUpdateUser, adminDeleteUser, showToast } from '../api'
+import { getUsers, adminCreateUser, adminUpdateUser, adminDeleteUser } from '../api'
+import { showToast } from '../utils/toast'
 import { formatDate } from '../utils/format'
 import { useAuthStore } from '../stores/auth'
 import { useConfirm } from '../utils/confirm'
@@ -232,18 +233,12 @@ async function confirmDelete(user) {
   gap: 0.35rem;
 }
 
-.btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
 .btn svg {
   width: 16px;
   height: 16px;
 }
 
 .btn-primary { background: var(--primary); color: white; }
-.btn-primary:hover:not(:disabled) { background: var(--primary-dark); }
 
 .btn-ghost { background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border); }
 .btn-ghost:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--text-muted); }
@@ -264,9 +259,7 @@ async function confirmDelete(user) {
 .btn-icon.btn-danger:hover { background: var(--error-bg); color: var(--error); }
 
 /* Loading / Empty */
-.loading { text-align: center; padding: 3rem; }
 .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto; }
-@keyframes spin { to { transform: rotate(360deg); } }
 
 /* Table */
 .user-table-wrapper {

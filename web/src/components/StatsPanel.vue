@@ -22,22 +22,33 @@
       <!-- 总览卡片 -->
       <div class="stats-overview">
         <div class="stat-box">
+          <div class="stat-icon">📝</div>
           <span class="stat-value">{{ summary.total }}</span>
           <span class="stat-label">总题数</span>
         </div>
         <div class="stat-box">
+          <div class="stat-icon">✅</div>
           <span class="stat-value">{{ summary.answered }}</span>
           <span class="stat-label">已做</span>
         </div>
         <div class="stat-box">
+          <div class="stat-icon">🎯</div>
           <span class="stat-value accent">{{ summary.accuracy }}%</span>
           <span class="stat-label">正确率</span>
         </div>
         <div class="stat-box">
+          <div class="stat-icon">📋</div>
           <span class="stat-value">{{ summary.unanswered }}</span>
           <span class="stat-label">未做</span>
         </div>
       </div>
+
+      <!-- 雷达图：各科目正确率 -->
+      <div class="stats-section-title">能力雷达</div>
+      <div class="radar-chart-wrapper" v-if="moduleStats.length >= 3">
+        <Radar :data="radarData" :options="radarOptions" />
+      </div>
+      <div class="stats-empty-hint" v-else>需要至少 3 个科目才有雷达图</div>
 
       <!-- 各科目进度 -->
       <div class="stats-section-title">各科目进度</div>
@@ -58,15 +69,57 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { getExamStats } from '../api'
 import { useExamStore } from '../stores/exam'
+import { Radar } from 'vue-chartjs'
+import { Chart as ChartJS, RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend } from 'chart.js'
+
+ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
 
 const examStore = useExamStore()
 
 const loading = ref(false)
 const moduleStats = ref([])
 const summary = ref({ total: 0, answered: 0, accuracy: 0, unanswered: 0 })
+
+const radarData = computed(() => ({
+  labels: moduleStats.value.map(m => m.name.length > 4 ? m.name.slice(0, 4) + '…' : m.name),
+  datasets: [{
+    label: '正确率',
+    data: moduleStats.value.map(m => m.accuracy || 0),
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    borderColor: '#6366f1',
+    borderWidth: 2,
+    pointBackgroundColor: '#6366f1',
+    pointBorderColor: '#fff',
+    pointBorderWidth: 1,
+    pointRadius: 3,
+  }]
+}))
+
+const radarOptions = {
+  responsive: true,
+  maintainAspectRatio: true,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        label: (ctx) => `正确率: ${ctx.raw}%`
+      }
+    }
+  },
+  scales: {
+    r: {
+      beginAtZero: true,
+      max: 100,
+      ticks: { stepSize: 20, display: false },
+      grid: { color: 'rgba(0,0,0,0.06)' },
+      angleLines: { color: 'rgba(0,0,0,0.06)' },
+      pointLabels: { font: { size: 10 }, color: '#64748b' }
+    }
+  }
+}
 
 watch(() => examStore.state.currentExamId, async (id) => {
   if (!id) {
@@ -190,6 +243,11 @@ async function loadStats(examId) {
 
 .stat-value.accent { color: var(--primary); }
 
+.stat-icon {
+  font-size: 1.1rem;
+  margin-bottom: 0.15rem;
+}
+
 .stat-label {
   font-size: 0.7rem;
   color: var(--text-muted);
@@ -248,6 +306,11 @@ async function loadStats(examId) {
   background: var(--primary);
   border-radius: 2px;
   transition: width 0.5s ease;
+}
+
+.radar-chart-wrapper {
+  margin-bottom: 1.25rem;
+  padding: 0.25rem;
 }
 
 .stats-empty-hint {

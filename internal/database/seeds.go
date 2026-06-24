@@ -2,8 +2,11 @@ package database
 
 import (
 	_ "embed"
+	"crypto/rand"
 	"fmt"
-	"log"
+	"log/slog"
+	"math/big"
+	"os"
 
 	"exam-quiz/internal/model"
 	"exam-quiz/internal/util"
@@ -52,9 +55,27 @@ func ensureAdmin() {
 	var count int64
 	DB.Model(&model.User{}).Count(&count)
 	if count == 0 {
-		hashedPassword, err := util.HashPassword("admin")
+		password := os.Getenv("ADMIN_PASSWORD")
+		if password == "" {
+			var err error
+			password, err = generateRandomPassword(16)
+			if err != nil {
+				slog.Warn("failed to generate random admin password", "error", err)
+				return
+			}
+			fmt.Println("╔══════════════════════════════════════════════════════════════╗")
+			fmt.Println("║  WARNING: ADMIN_PASSWORD was not set.                       ║")
+			fmt.Println("║  A random password has been generated for the admin account.║")
+			fmt.Println("║  SAVE THIS PASSWORD — it will NOT be shown again.           ║")
+			fmt.Printf("║  Username: admin / Password: %-31s ║\n", password)
+			fmt.Println("║                                                             ║")
+			fmt.Println("║  Set ADMIN_PASSWORD env var to control the initial password. ║")
+			fmt.Println("╚══════════════════════════════════════════════════════════════╝")
+		}
+
+		hashedPassword, err := util.HashPassword(password)
 		if err != nil {
-			log.Printf("warning: failed to hash admin password: %v", err)
+			slog.Warn("failed to hash admin password", "error", err)
 			return
 		}
 		admin := model.User{
@@ -64,11 +85,26 @@ func ensureAdmin() {
 			Role:     "admin",
 		}
 		if err := DB.Create(&admin).Error; err != nil {
-			log.Printf("warning: failed to create admin user: %v", err)
+			slog.Warn("failed to create admin user", "error", err)
 		} else {
-			fmt.Println("Default admin user created. Username: admin / Password: admin")
+			slog.Warn("default admin user created, please change the password after first login")
 		}
 	}
+}
+
+// generateRandomPassword creates a cryptographically random password of the given length
+// using uppercase, lowercase, digits, and a safe special character set.
+func generateRandomPassword(length int) (string, error) {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*"
+	result := make([]byte, length)
+	for i := range result {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return "", fmt.Errorf("failed to generate random bytes: %w", err)
+		}
+		result[i] = charset[n.Int64()]
+	}
+	return string(result), nil
 }
 
 func ensureRegistrationConfig() {

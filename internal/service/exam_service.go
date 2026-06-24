@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 
+	"exam-quiz/internal/apperr"
 	"exam-quiz/internal/cache"
 	"exam-quiz/internal/database"
 	"exam-quiz/internal/model"
@@ -65,27 +66,41 @@ func DeleteModule(id uint) error {
 // ValidateExamTypeExists checks that an exam type exists. Returns a user-friendly error if not.
 func ValidateExamTypeExists(id uint) error {
 	_, err := repository.GetExamType(id)
-	return err
+	if err != nil {
+		return apperr.NotFound("考试类型不存在")
+	}
+	return nil
 }
 
 // ValidateModuleExists checks that a module exists. Returns a user-friendly error if not.
 func ValidateModuleExists(id uint) error {
 	_, err := repository.GetModule(id)
-	return err
+	if err != nil {
+		return apperr.NotFound("模块不存在")
+	}
+	return nil
 }
 
 // CheckExamTypeNameUnique returns an error if the exam type name already exists.
 func CheckExamTypeNameUnique(name string) error {
-	if existing, _ := repository.GetExamTypeByName(name); existing != nil {
-		return fmt.Errorf("该考试类型名称已存在")
+	existing, err := repository.GetExamTypeByName(name)
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return apperr.Internal("查询失败")
+	}
+	if existing != nil {
+		return apperr.Conflict("该考试类型名称已存在")
 	}
 	return nil
 }
 
 // CheckModuleNameUnique returns an error if the module name already exists under the given exam type.
 func CheckModuleNameUnique(name string, examTypeID uint) error {
-	if existing, _ := repository.GetModuleByNameAndExamID(name, examTypeID); existing != nil {
-		return fmt.Errorf("该考试类型下已存在同名模块")
+	existing, err := repository.GetModuleByNameAndExamID(name, examTypeID)
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return apperr.Internal("查询失败")
+	}
+	if existing != nil {
+		return apperr.Conflict("该考试类型下已存在同名模块")
 	}
 	return nil
 }
@@ -123,13 +138,13 @@ type FullImportData struct {
 // FullImportExamType is the exam type structure used for import.
 type FullImportExamType struct {
 	model.ExamType
-	Modules []FullImportModule `json:"modules,omitempty"`
+	Modules []FullImportModule `json:"modules,omitzero"`
 }
 
 // FullImportModule is the module structure used for import.
 type FullImportModule struct {
 	model.Module
-	Questions []FullImportQuestion `json:"questions,omitempty"`
+	Questions []FullImportQuestion `json:"questions,omitzero"`
 }
 
 // FullImportQuestion is the question structure used for import (matched by module name).

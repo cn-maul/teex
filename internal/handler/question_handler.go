@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"log"
+	"log/slog"
 
 	"exam-quiz/internal/model"
 	"exam-quiz/internal/response"
@@ -9,7 +9,6 @@ import (
 	"exam-quiz/internal/validator"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // ListQuestions 查询题目列表
@@ -32,8 +31,8 @@ func ListQuestions(c *gin.Context) {
 
 	questions, total, err := service.ListQuestions(filter)
 	if err != nil {
-		log.Printf("ListQuestions error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("list questions failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 
@@ -50,11 +49,8 @@ func GetQuestion(c *gin.Context) {
 
 	question, err := service.GetQuestion(id)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.Error(c, 404, "题目不存在")
-			return
-		}
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("get question failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, question)
@@ -70,11 +66,7 @@ func CreateQuestion(c *gin.Context) {
 
 	// Validate module exists
 	if err := service.ValidateModuleExists(question.ModuleID); err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.Error(c, 404, "模块不存在")
-			return
-		}
-		response.Error(c, 400, "模块不存在")
+		response.HandleError(c, err)
 		return
 	}
 
@@ -84,8 +76,8 @@ func CreateQuestion(c *gin.Context) {
 	}
 
 	if err := service.CreateQuestion(&question); err != nil {
-		log.Printf("CreateQuestion error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("create question failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.Created(c, question)
@@ -101,11 +93,8 @@ func UpdateQuestion(c *gin.Context) {
 
 	// Check existence
 	if _, err := service.GetQuestion(id); err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.Error(c, 404, "题目不存在")
-			return
-		}
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("update question check failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 
@@ -119,7 +108,7 @@ func UpdateQuestion(c *gin.Context) {
 	// Validate module_id exists if provided
 	if question.ModuleID > 0 {
 		if err := service.ValidateModuleExists(question.ModuleID); err != nil {
-			response.Error(c, 400, "指定的模块不存在")
+			response.HandleError(c, err)
 			return
 		}
 	}
@@ -130,8 +119,8 @@ func UpdateQuestion(c *gin.Context) {
 	}
 
 	if err := service.UpdateQuestion(&question); err != nil {
-		log.Printf("UpdateQuestion error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("update question failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, question)
@@ -147,17 +136,14 @@ func DeleteQuestion(c *gin.Context) {
 
 	// Check existence
 	if _, err := service.GetQuestion(id); err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.Error(c, 404, "题目不存在")
-			return
-		}
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("delete question check failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 
 	if err := service.DeleteQuestion(id); err != nil {
-		log.Printf("DeleteQuestion error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("delete question failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OKWithMessage(c, nil, "删除成功")
@@ -204,15 +190,15 @@ func ImportQuestions(c *gin.Context) {
 	}
 	for moduleID := range moduleIDSet {
 		if err := service.ValidateModuleExists(moduleID); err != nil {
-			response.Error(c, 400, "模块不存在")
+			response.HandleError(c, err)
 			return
 		}
 	}
 
 	count, err := service.BatchImportQuestions(validQuestions)
 	if err != nil {
-		log.Printf("ImportQuestions error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("import questions failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, gin.H{
@@ -242,8 +228,8 @@ func BatchDeleteQuestions(c *gin.Context) {
 
 	deleted, err := service.BatchDeleteQuestions(req.IDs)
 	if err != nil {
-		log.Printf("BatchDeleteQuestions error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("batch delete questions failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, gin.H{"deleted": deleted})

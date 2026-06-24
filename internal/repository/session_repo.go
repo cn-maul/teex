@@ -42,7 +42,9 @@ func GetSessions(page, size int, userID uint) ([]model.ExamSession, int64, error
 	}
 	offset := (page - 1) * size
 
-	database.DB.Model(&model.ExamSession{}).Where("user_id = ?", userID).Count(&total)
+	if err := database.DB.Model(&model.ExamSession{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
 	err := database.DB.Preload("Module").
 		Where("user_id = ?", userID).
 		Order("started_at DESC").

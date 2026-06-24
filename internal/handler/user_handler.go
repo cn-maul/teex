@@ -1,8 +1,7 @@
 package handler
 
 import (
-	"log"
-	"strings"
+	"log/slog"
 
 	"exam-quiz/internal/response"
 	"exam-quiz/internal/service"
@@ -34,20 +33,8 @@ func Register(c *gin.Context) {
 
 	result, err := service.Register(req.Username, req.Password, req.Nickname)
 	if err != nil {
-		log.Printf("Register error: %v", err)
-		errMsg := err.Error()
-		safeErrors := []string{"用户名长度", "密码长度", "用户名已存在"}
-		safe := false
-		for _, se := range safeErrors {
-			if strings.Contains(errMsg, se) {
-				safe = true
-				break
-			}
-		}
-		if !safe {
-			errMsg = "操作失败，请稍后重试"
-		}
-		response.Error(c, 400, errMsg)
+		slog.Error("register failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 
@@ -67,8 +54,8 @@ func Login(c *gin.Context) {
 
 	result, err := service.Login(req.Username, req.Password)
 	if err != nil {
-		log.Printf("Login error: %v", err)
-		response.Error(c, 401, err.Error())
+		slog.Error("login failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 
@@ -80,20 +67,14 @@ func Login(c *gin.Context) {
 
 // GetProfile 获取当前用户信息
 func GetProfile(c *gin.Context) {
-	userIDRaw, exists := c.Get("user_id")
-	if !exists {
-		response.Error(c, 401, "未登录")
-		c.Abort()
-		return
-	}
-	userID, ok := userIDRaw.(uint)
+	userID, ok := validator.GetUserID(c)
 	if !ok {
-		response.Error(c, 401, "认证信息无效")
 		return
 	}
 	user, err := service.GetProfile(userID)
 	if err != nil {
-		response.Error(c, 500, "获取用户信息失败")
+		slog.Error("get profile failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, user)
@@ -103,8 +84,8 @@ func GetProfile(c *gin.Context) {
 func ListUsers(c *gin.Context) {
 	users, err := service.ListUsers()
 	if err != nil {
-		log.Printf("ListUsers error: %v", err)
-		response.Error(c, 500, "操作失败")
+		slog.Error("list users failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, users)
@@ -123,20 +104,13 @@ func UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	userIDRaw, exists := c.Get("user_id")
-	if !exists {
-		response.Error(c, 401, "未登录")
-		c.Abort()
-		return
-	}
-	userID, ok := userIDRaw.(uint)
+	userID, ok := validator.GetUserID(c)
 	if !ok {
-		response.Error(c, 401, "认证信息无效")
 		return
 	}
 	if err := service.UpdateProfile(userID, req.Nickname); err != nil {
-		log.Printf("UpdateProfile error: %v", err)
-		response.Error(c, 400, err.Error())
+		slog.Error("update profile failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OKWithMessage(c, nil, "昵称修改成功")
@@ -156,20 +130,13 @@ func ChangePassword(c *gin.Context) {
 		return
 	}
 
-	userIDRaw, exists := c.Get("user_id")
-	if !exists {
-		response.Error(c, 401, "未登录")
-		c.Abort()
-		return
-	}
-	userID, ok := userIDRaw.(uint)
+	userID, ok := validator.GetUserID(c)
 	if !ok {
-		response.Error(c, 401, "认证信息无效")
 		return
 	}
 	if err := service.ChangePassword(userID, req.OldPassword, req.NewPassword); err != nil {
-		log.Printf("ChangePassword error: %v", err)
-		response.Error(c, 400, err.Error())
+		slog.Error("change password failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OKWithMessage(c, nil, "密码修改成功")
@@ -191,8 +158,8 @@ func SetRegistrationStatus(c *gin.Context) {
 		return
 	}
 	if err := service.SetRegistrationEnabled(req.Enabled); err != nil {
-		log.Printf("SetRegistrationStatus error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("set registration status failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	msg := "注册已关闭"
@@ -222,20 +189,8 @@ func AdminCreateUser(c *gin.Context) {
 	}
 	user, err := service.AdminCreateUser(req.Username, req.Password, req.Nickname, req.Role)
 	if err != nil {
-		log.Printf("AdminCreateUser error: %v", err)
-		errMsg := err.Error()
-		safeErrors := []string{"用户名长度", "密码长度", "用户名已存在", "角色只能是"}
-		safe := false
-		for _, se := range safeErrors {
-			if strings.Contains(errMsg, se) {
-				safe = true
-				break
-			}
-		}
-		if !safe {
-			errMsg = "操作失败，请稍后重试"
-		}
-		response.Error(c, 400, errMsg)
+		slog.Error("admin create user failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.Created(c, user)
@@ -265,20 +220,8 @@ func AdminUpdateUser(c *gin.Context) {
 		return
 	}
 	if err := service.AdminUpdateUser(id, req.Nickname, req.NewPassword, req.Role); err != nil {
-		log.Printf("AdminUpdateUser error: %v", err)
-		errMsg := err.Error()
-		safeErrors := []string{"昵称长度", "密码长度", "用户不存在", "角色只能是", "未提供"}
-		safe := false
-		for _, se := range safeErrors {
-			if strings.Contains(errMsg, se) {
-				safe = true
-				break
-			}
-		}
-		if !safe {
-			errMsg = "操作失败，请稍后重试"
-		}
-		response.Error(c, 400, errMsg)
+		slog.Error("admin update user failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OKWithMessage(c, nil, "用户信息已更新")
@@ -291,20 +234,13 @@ func AdminDeleteUser(c *gin.Context) {
 		response.Error(c, 400, "无效的用户 ID")
 		return
 	}
-	userIDRaw, exists := c.Get("user_id")
-	if !exists {
-		response.Error(c, 401, "未登录")
-		c.Abort()
-		return
-	}
-	currentAdminID, ok := userIDRaw.(uint)
+	currentAdminID, ok := validator.GetUserID(c)
 	if !ok {
-		response.Error(c, 401, "认证信息无效")
 		return
 	}
 	if err := service.AdminDeleteUser(id, currentAdminID); err != nil {
-		log.Printf("AdminDeleteUser error: %v", err)
-		response.Error(c, 400, err.Error())
+		slog.Error("admin delete user failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OKWithMessage(c, nil, "用户已删除")

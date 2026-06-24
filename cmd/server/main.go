@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -17,12 +18,18 @@ import (
 
 	exam_quiz "exam-quiz"
 	"exam-quiz/internal/database"
+	"exam-quiz/internal/middleware"
 	"exam-quiz/internal/router"
 
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	// Configure structured logging
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	})))
+
 	// 数据库默认存放在当前目录
 	dbDir := "."
 	if dir := os.Getenv("DATA_DIR"); dir != "" {
@@ -31,7 +38,9 @@ func main() {
 	dbPath := filepath.Join(dbDir, "exam-quiz.db")
 
 	// 确保目录存在
-	os.MkdirAll(dbDir, 0755)
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		log.Fatalf("failed to create data directory %s: %v", dbDir, err)
+	}
 
 	// 初始化数据库
 	fmt.Println("Initializing database...")
@@ -42,7 +51,7 @@ func main() {
 	// 加载种子数据（从嵌入的二进制数据）
 	fmt.Println("Loading seed data...")
 	if err := database.Seed(); err != nil {
-		log.Printf("warning: failed to load seed data: %v", err)
+		slog.Warn("failed to load seed data", "error", err)
 	}
 
 	// 设置路由
@@ -84,6 +93,7 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatalf("server forced to shutdown: %v", err)
 	}
+	middleware.StopCleanup()
 	fmt.Println("Server exited gracefully")
 }
 

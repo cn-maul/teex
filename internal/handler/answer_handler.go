@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"exam-quiz/internal/cache"
 	"exam-quiz/internal/response"
@@ -12,7 +12,6 @@ import (
 	"exam-quiz/internal/validator"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // StartQuizRequest 开始刷题请求
@@ -54,34 +53,18 @@ func StartQuiz(c *gin.Context) {
 
 	// Validate module exists
 	if err := service.ValidateModuleExists(req.ModuleID); err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.Error(c, 404, "模块不存在")
-			return
-		}
-		response.Error(c, 400, "模块不存在")
+		response.HandleError(c, err)
 		return
 	}
 
-	userIDRaw, exists := c.Get("user_id")
-	if !exists {
-		response.Error(c, 401, "未登录")
-		c.Abort()
-		return
-	}
-	userID, ok := userIDRaw.(uint)
+	userID, ok := validator.GetUserID(c)
 	if !ok {
-		response.Error(c, 401, "认证信息无效")
 		return
 	}
 	questions, sessionID, err := service.StartQuiz(req.ModuleID, req.Count, req.Mode, req.Difficulty, req.Tags, userID)
 	if err != nil {
-		log.Printf("StartQuiz error: %v", err)
-		// Business errors like "该模块暂无题目" are safe to show
-		errMsg := err.Error()
-		if strings.Contains(errMsg, "创建考试场次失败") {
-			errMsg = "操作失败，请稍后重试"
-		}
-		response.Error(c, 400, errMsg)
+		slog.Error("start quiz failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 
@@ -115,21 +98,14 @@ func SubmitAnswer(c *gin.Context) {
 		return
 	}
 
-	userIDRaw, exists := c.Get("user_id")
-	if !exists {
-		response.Error(c, 401, "未登录")
-		c.Abort()
-		return
-	}
-	userID, ok := userIDRaw.(uint)
+	userID, ok := validator.GetUserID(c)
 	if !ok {
-		response.Error(c, 401, "认证信息无效")
 		return
 	}
 	result, err := service.SubmitAnswer(req.QuestionID, req.UserInput, req.Duration, req.SessionID, userID)
 	if err != nil {
-		log.Printf("SubmitAnswer error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("submit answer failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 
@@ -155,17 +131,8 @@ func SubmitBatchAnswers(c *gin.Context) {
 		return
 	}
 
-	var results []service.AnswerResult
-
-	userIDRaw, exists := c.Get("user_id")
-	if !exists {
-		response.Error(c, 401, "未登录")
-		c.Abort()
-		return
-	}
-	userID, ok := userIDRaw.(uint)
+	userID, ok := validator.GetUserID(c)
 	if !ok {
-		response.Error(c, 401, "认证信息无效")
 		return
 	}
 
@@ -175,10 +142,9 @@ func SubmitBatchAnswers(c *gin.Context) {
 	}
 
 	results, err := service.SubmitBatchAnswersWithSession(req.SessionID, req.Answers, userID)
-
 	if err != nil {
-		log.Printf("SubmitBatchAnswers error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("submit batch answers failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 
@@ -187,21 +153,14 @@ func SubmitBatchAnswers(c *gin.Context) {
 
 // GetStats 获取统计数据
 func GetStats(c *gin.Context) {
-	userIDRaw, exists := c.Get("user_id")
-	if !exists {
-		response.Error(c, 401, "未登录")
-		c.Abort()
-		return
-	}
-	userID, ok := userIDRaw.(uint)
+	userID, ok := validator.GetUserID(c)
 	if !ok {
-		response.Error(c, 401, "认证信息无效")
 		return
 	}
 	stats, err := service.GetOverallStats(userID)
 	if err != nil {
-		log.Printf("GetStats error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("get stats failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, stats)
@@ -215,21 +174,14 @@ func GetModuleStats(c *gin.Context) {
 		return
 	}
 
-	userIDRaw, exists := c.Get("user_id")
-	if !exists {
-		response.Error(c, 401, "未登录")
-		c.Abort()
-		return
-	}
-	userID, ok := userIDRaw.(uint)
+	userID, ok := validator.GetUserID(c)
 	if !ok {
-		response.Error(c, 401, "认证信息无效")
 		return
 	}
 	stats, err := service.GetModuleStats(id, userID)
 	if err != nil {
-		log.Printf("GetModuleStats error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("get module stats failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, stats)
@@ -237,21 +189,13 @@ func GetModuleStats(c *gin.Context) {
 
 // ClearAllRecords 清空当前用户的所有答题记录
 func ClearAllRecords(c *gin.Context) {
-	userIDRaw, exists := c.Get("user_id")
-	if !exists {
-		response.Error(c, 401, "未登录")
-		c.Abort()
-		return
-	}
-	userID, ok := userIDRaw.(uint)
+	userID, ok := validator.GetUserID(c)
 	if !ok {
-		response.Error(c, 401, "认证信息无效")
 		return
 	}
-	uid := userID
-	if err := service.ClearAllRecords(uid); err != nil {
-		log.Printf("ClearAllRecords error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+	if err := service.ClearAllRecords(userID); err != nil {
+		slog.Error("clear all records failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	// Clear all caches since clearing records affects all stats
@@ -271,21 +215,14 @@ func GetSessions(c *gin.Context) {
 		size = 20
 	}
 
-	userIDRaw, exists := c.Get("user_id")
-	if !exists {
-		response.Error(c, 401, "未登录")
-		c.Abort()
-		return
-	}
-	userID, ok := userIDRaw.(uint)
+	userID, ok := validator.GetUserID(c)
 	if !ok {
-		response.Error(c, 401, "认证信息无效")
 		return
 	}
 	sessions, total, err := service.GetSessions(page, size, userID)
 	if err != nil {
-		log.Printf("GetSessions error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("get sessions failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.List(c, sessions, total)
@@ -299,24 +236,14 @@ func GetSession(c *gin.Context) {
 		return
 	}
 
-	userIDRaw, exists := c.Get("user_id")
-	if !exists {
-		response.Error(c, 401, "未登录")
-		c.Abort()
-		return
-	}
-	userID, ok := userIDRaw.(uint)
+	userID, ok := validator.GetUserID(c)
 	if !ok {
-		response.Error(c, 401, "认证信息无效")
 		return
 	}
 	session, err := service.GetSession(id, userID)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.Error(c, 404, "场次不存在")
-			return
-		}
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("get session failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, session)
@@ -330,15 +257,8 @@ func GetSessionAnswers(c *gin.Context) {
 		return
 	}
 
-	userIDRaw, exists := c.Get("user_id")
-	if !exists {
-		response.Error(c, 401, "未登录")
-		c.Abort()
-		return
-	}
-	userID, ok := userIDRaw.(uint)
+	userID, ok := validator.GetUserID(c)
 	if !ok {
-		response.Error(c, 401, "认证信息无效")
 		return
 	}
 
@@ -358,12 +278,8 @@ func GetSessionAnswers(c *gin.Context) {
 
 		answers, total, err := service.GetSessionAnswersPaginated(id, page, size, userID)
 		if err != nil {
-			if err == gorm.ErrRecordNotFound {
-				response.Error(c, 404, "场次不存在")
-				return
-			}
-			log.Printf("GetSessionAnswers error: %v", err)
-			response.Error(c, 500, "操作失败，请稍后重试")
+			slog.Error("get session answers failed", "error", err)
+			response.HandleError(c, err)
 			return
 		}
 		response.List(c, answers, total)
@@ -372,13 +288,53 @@ func GetSessionAnswers(c *gin.Context) {
 
 	answers, err := service.GetSessionAnswers(id, userID)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.Error(c, 404, "场次不存在")
-			return
-		}
-		log.Printf("GetSessionAnswers error: %v", err)
-		response.Error(c, 500, "操作失败，请稍后重试")
+		slog.Error("get session answers failed", "error", err)
+		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, answers)
+}
+
+// GetDashboardStats 获取仪表盘统计数据
+func GetDashboardStats(c *gin.Context) {
+	userID, ok := validator.GetUserID(c)
+	if !ok {
+		return
+	}
+
+	// Check cache
+	cacheKey := fmt.Sprintf("dashboard_stats:%d", userID)
+	if cached, ok := cache.Get(cacheKey); ok {
+		response.OK(c, cached)
+		return
+	}
+
+	stats, err := service.GetDashboardStats(userID)
+	if err != nil {
+		slog.Error("get dashboard stats failed", "error", err)
+		response.HandleError(c, err)
+		return
+	}
+
+	cache.Set(cacheKey, stats)
+	response.OK(c, stats)
+}
+
+// GetAdminDashboardStats 获取管理员全局数据看板
+func GetAdminDashboardStats(c *gin.Context) {
+	cacheKey := "admin_dashboard_stats"
+	if cached, ok := cache.Get(cacheKey); ok {
+		response.OK(c, cached)
+		return
+	}
+
+	stats, err := service.GetAdminDashboardStats()
+	if err != nil {
+		slog.Error("get admin dashboard stats failed", "error", err)
+		response.HandleError(c, err)
+		return
+	}
+
+	cache.Set(cacheKey, stats)
+	response.OK(c, stats)
 }

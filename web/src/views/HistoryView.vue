@@ -1,7 +1,23 @@
 <template>
   <div class="history-view">
     <h1>历史记录</h1>
-    
+
+    <!-- 学习统计图表 -->
+    <div v-if="!loading && sessions.length > 0" class="history-charts">
+      <div class="chart-card">
+        <h3 class="chart-card-title">正确率趋势</h3>
+        <div class="chart-wrapper">
+          <Line :data="accuracyTrendData" :options="lineOptions" />
+        </div>
+      </div>
+      <div class="chart-card">
+        <h3 class="chart-card-title">每日练习量</h3>
+        <div class="chart-wrapper">
+          <Bar :data="dailyActivityData" :options="barOptions" />
+        </div>
+      </div>
+    </div>
+
     <div v-if="loading" class="loading">
       <div class="spinner"></div>
       <p>加载中...</p>
@@ -152,9 +168,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { Line, Bar } from 'vue-chartjs'
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler } from 'chart.js'
 import { getSessions, getSessionAnswers } from '../api'
 import { formatDuration } from '../utils/format'
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler)
 
 const sessions = ref([])
 const total = ref(0)
@@ -165,6 +185,110 @@ const loading = ref(true)
 const detailSession = ref(null)
 const detailAnswers = ref([])
 const detailLoading = ref(false)
+
+const accuracyTrendData = computed(() => {
+  // Use sessions in reverse order (oldest first) for the chart
+  const recent = [...sessions.value].reverse().slice(-14) // last 14 sessions
+  return {
+    labels: recent.map((s, i) => {
+      if (!s.started_at) return `#${i + 1}`
+      const d = new Date(s.started_at)
+      return `${d.getMonth() + 1}/${d.getDate()}`
+    }),
+    datasets: [{
+      label: '正确率',
+      data: recent.map(s => s.total_count > 0 ? Math.round(s.correct_count / s.total_count * 100) : 0),
+      borderColor: '#6366f1',
+      backgroundColor: 'rgba(99, 102, 241, 0.08)',
+      borderWidth: 2,
+      fill: true,
+      tension: 0.3,
+      pointBackgroundColor: '#6366f1',
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+    }]
+  }
+})
+
+const dailyActivityData = computed(() => {
+  // Aggregate sessions by day for last 14 days
+  const now = new Date()
+  const days = []
+  const counts = []
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(d.getDate() - i)
+    const label = `${d.getMonth() + 1}/${d.getDate()}`
+    days.push(label)
+    const dayStr = d.toISOString().slice(0, 10)
+    const count = sessions.value.filter(s => {
+      if (!s.started_at) return false
+      return s.started_at.slice(0, 10) === dayStr
+    }).length
+    counts.push(count)
+  }
+  return {
+    labels: days,
+    datasets: [{
+      label: '练习次数',
+      data: counts,
+      backgroundColor: '#818cf8',
+      borderRadius: 4,
+      borderSkipped: false,
+    }]
+  }
+})
+
+const lineOptions = {
+  responsive: true,
+  maintainAspectRatio: true,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        label: (ctx) => `正确率: ${ctx.raw}%`
+      }
+    }
+  },
+  scales: {
+    y: {
+      beginAtZero: true,
+      max: 100,
+      ticks: { callback: (v) => v + '%', font: { size: 10 } },
+      grid: { color: 'rgba(0,0,0,0.05)' }
+    },
+    x: {
+      ticks: { font: { size: 10 }, maxRotation: 45 },
+      grid: { display: false }
+    }
+  }
+}
+
+const barOptions = {
+  responsive: true,
+  maintainAspectRatio: true,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        label: (ctx) => `${ctx.raw} 次`
+      }
+    }
+  },
+  scales: {
+    y: {
+      beginAtZero: true,
+      ticks: { stepSize: 1, font: { size: 10 } },
+      grid: { color: 'rgba(0,0,0,0.05)' }
+    },
+    x: {
+      ticks: { font: { size: 10 }, maxRotation: 45 },
+      grid: { display: false }
+    }
+  }
+}
 
 onMounted(async () => {
   await loadSessions()
@@ -253,26 +377,6 @@ h1 {
   margin-bottom: 1.75rem;
 }
 
-.loading {
-  text-align: center;
-  padding: 3rem;
-  color: var(--text-muted);
-}
-
-.spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid var(--border);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 0 auto 1rem;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 .empty {
   text-align: center;
   padding: 4rem 2rem;
@@ -294,6 +398,33 @@ h1 {
   font-size: 0.9rem;
   color: var(--text-muted);
   margin-bottom: 1.5rem;
+}
+
+/* Charts */
+.history-charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+
+.chart-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+}
+
+.chart-card-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.75rem;
+}
+
+.chart-wrapper {
+  height: 200px;
+  position: relative;
 }
 
 /* Timeline */
@@ -564,12 +695,12 @@ h1 {
 }
 
 .answer-correct {
-  background: #f0fdf4;
+  background: var(--success-bg);
   border-color: var(--success);
 }
 
 .answer-wrong {
-  background: #fef2f2;
+  background: var(--error-bg);
   border-color: var(--error);
 }
 
@@ -620,41 +751,6 @@ h1 {
   margin-top: 0.5rem;
   padding-top: 0.5rem;
   border-top: 1px solid var(--border-light);
-}
-
-/* Buttons */
-.btn {
-  padding: 0.6rem 1.25rem;
-  border: none;
-  border-radius: var(--radius);
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: var(--primary);
-  color: white;
-}
-
-.btn-primary:hover {
-  background: var(--primary-dark);
-}
-
-.btn-ghost {
-  background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-}
-
-.btn-ghost:hover:not(:disabled) {
-  background: var(--bg-hover);
 }
 
 /* Modal transition */
@@ -754,6 +850,14 @@ h1 {
   .pagination .btn {
     padding: 0.5rem 0.85rem;
     font-size: 0.8rem;
+  }
+
+  .history-charts {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-wrapper {
+    height: 180px;
   }
 }
 </style>

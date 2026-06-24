@@ -28,7 +28,14 @@ var (
 	allLimiterCfgs []RateLimiterConfig
 	allMapMus      []*sync.Mutex
 	cleanupOnce    sync.Once
+	cleanupQuit    = make(chan struct{})
 )
+
+// StopCleanup signals the background cleanup goroutine to exit.
+// Call this during graceful server shutdown.
+func StopCleanup() {
+	close(cleanupQuit)
+}
 
 // startCleanup launches a single background goroutine that sweeps expired
 // entries from every registered rate limiter map. It is safe to call multiple
@@ -37,22 +44,26 @@ func startCleanup() {
 	cleanupOnce.Do(func() {
 		go func() {
 			for {
-				time.Sleep(time.Minute)
-				globalMu.Lock()
-				for i, visitors := range allLimiterMaps {
-					mu := allMapMus[i]
-					window := allLimiterCfgs[i].Window
-					mu.Lock()
-					for ip, v := range visitors {
-						v.mu.Lock()
-						if time.Since(v.lastSeen) > window*2 {
-							delete(visitors, ip)
+				select {
+				case <-time.After(time.Minute):
+					globalMu.Lock()
+					for i, visitors := range allLimiterMaps {
+						mu := allMapMus[i]
+						window := allLimiterCfgs[i].Window
+						mu.Lock()
+						for ip, v := range visitors {
+							v.mu.Lock()
+							if time.Since(v.lastSeen) > window*2 {
+								delete(visitors, ip)
+							}
+							v.mu.Unlock()
 						}
-						v.mu.Unlock()
+						mu.Unlock()
 					}
-					mu.Unlock()
+					globalMu.Unlock()
+				case <-cleanupQuit:
+					return
 				}
-				globalMu.Unlock()
 			}
 		}()
 	})

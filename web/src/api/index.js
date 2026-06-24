@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { showToast } from '../utils/toast.js'
 
 const api = axios.create({
   baseURL: '/api',
@@ -7,40 +8,6 @@ const api = axios.create({
     'Content-Type': 'application/json'
   }
 })
-
-// 简易 Toast 通知
-function showToast(message, type = 'error') {
-  const existing = document.querySelector('.toast-notification')
-  if (existing) existing.remove()
-
-  const toast = document.createElement('div')
-  toast.className = 'toast-notification'
-  toast.style.cssText = `
-    position: fixed; top: 20px; right: 20px; z-index: 10000;
-    padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 500;
-    color: white; max-width: 400px; word-break: break-word;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: toast-in 0.3s ease;
-    background: ${type === 'error' ? '#ef4444' : type === 'success' ? '#22c55e' : '#3b82f6'};
-  `
-  toast.textContent = message
-  document.body.appendChild(toast)
-
-  // 添加动画样式
-  if (!document.querySelector('#toast-style')) {
-    const style = document.createElement('style')
-    style.id = 'toast-style'
-    style.textContent = `
-      @keyframes toast-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-      @keyframes toast-out { from { opacity: 1; } to { opacity: 0; transform: translateY(-10px); } }
-    `
-    document.head.appendChild(style)
-  }
-
-  setTimeout(() => {
-    toast.style.animation = 'toast-out 0.3s ease forwards'
-    setTimeout(() => toast.remove(), 300)
-  }, 3000)
-}
 
 // 请求拦截器：自动注入 token
 api.interceptors.request.use(
@@ -76,16 +43,20 @@ api.interceptors.response.use(
       return Promise.reject(error)
     }
     if (error.response?.status === 429) {
-      showToast('请求过于频繁，请稍后再试')
+      showToast('请求过于频繁，请稍后再试', 'error')
+      return Promise.reject(error)
+    }
+    if (error.response?.status === 403) {
+      showToast(error.response?.data?.error || '没有权限执行此操作', 'error')
       return Promise.reject(error)
     }
     if (error.response?.status === 500) {
-      showToast('服务器内部错误，请稍后重试')
+      showToast('服务器内部错误，请稍后重试', 'error')
       return Promise.reject(error)
     }
     const message = error.response?.data?.error
       || (error.code === 'ECONNABORTED' ? '请求超时，请稍后重试' : '网络错误，请检查连接')
-    showToast(message)
+    showToast(message, 'error')
     return Promise.reject(error)
   }
 )
@@ -111,6 +82,9 @@ export const submitBatchAnswers = (data) => api.post('/quiz/submit-batch', data)
 export const getStats = () => api.get('/stats')
 export const getModuleStats = (id) => api.get(`/stats/module/${id}`)
 export const getExamStats = (examId) => api.get(`/exams/${examId}/stats`)
+export const getDashboardStats = () => api.get('/stats/dashboard')
+export const getAdminDashboardStats = () => api.get('/admin/dashboard')
+
 // 数据管理
 export const deleteRecords = () => api.delete('/records')
 
@@ -148,4 +122,3 @@ export const getRegistrationStatus = () => api.get('/settings/registration')
 export const setRegistrationStatus = (data) => api.put('/settings/registration', data)
 
 export default api
-export { showToast }

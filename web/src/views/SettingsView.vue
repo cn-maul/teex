@@ -35,20 +35,28 @@
       <div v-if="statsLoading" class="stats-loading">加载中...</div>
       <div v-else class="stats-grid">
         <div class="stat-card">
-          <span class="stat-value">{{ stats.total_questions }}</span>
-          <span class="stat-label">总题数</span>
-        </div>
-        <div class="stat-card">
+          <div class="stat-ring-mini">
+            <Doughnut :data="completionData" :options="miniDoughnutOptions" />
+          </div>
           <span class="stat-value">{{ stats.total_answered }}</span>
-          <span class="stat-label">已做</span>
+          <span class="stat-label">已做 / {{ stats.total_questions }} 题</span>
         </div>
-        <div class="stat-card">
+        <div class="stat-card accent-card">
+          <div class="stat-ring-mini">
+            <Doughnut :data="accuracyData" :options="miniDoughnutOptions" />
+          </div>
           <span class="stat-value accent">{{ stats.accuracy }}%</span>
           <span class="stat-label">正确率</span>
         </div>
         <div class="stat-card">
+          <div class="stat-icon-lg">📚</div>
+          <span class="stat-value">{{ stats.total_questions }}</span>
+          <span class="stat-label">总题数</span>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-lg">⏳</div>
           <span class="stat-value">{{ stats.unanswered }}</span>
-          <span class="stat-label">未做</span>
+          <span class="stat-label">待完成</span>
         </div>
       </div>
     </div>
@@ -67,7 +75,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useExamStore } from '../stores/exam'
 import { useAuthStore } from '../stores/auth.js'
 import { deleteRecords, getStats, updateProfile, changePassword, getRegistrationStatus, setRegistrationStatus } from '../api'
@@ -79,6 +87,10 @@ import PasswordSection from '../components/settings/PasswordSection.vue'
 import AdminSection from '../components/settings/AdminSection.vue'
 import QuizPreferenceSection from '../components/settings/QuizPreferenceSection.vue'
 import DataSection from '../components/settings/DataSection.vue'
+import { Doughnut } from 'vue-chartjs'
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
+
+ChartJS.register(ArcElement, Tooltip, Legend)
 
 const { showConfirm } = useConfirm()
 
@@ -99,6 +111,36 @@ const registrationLoading = ref(true)
 
 // 密码修改状态
 const passwordSaved = ref(false)
+
+const completionData = computed(() => ({
+  labels: ['已完成', '未完成'],
+  datasets: [{
+    data: [stats.value.total_answered, stats.value.unanswered],
+    backgroundColor: ['#6366f1', '#e2e8f0'],
+    borderWidth: 0,
+    hoverOffset: 2
+  }]
+}))
+
+const accuracyData = computed(() => ({
+  labels: ['正确', '错误'],
+  datasets: [{
+    data: [stats.value.accuracy, 100 - stats.value.accuracy],
+    backgroundColor: ['#10b981', '#e2e8f0'],
+    borderWidth: 0,
+    hoverOffset: 2
+  }]
+}))
+
+const miniDoughnutOptions = {
+  responsive: true,
+  maintainAspectRatio: true,
+  cutout: '72%',
+  plugins: {
+    legend: { display: false },
+    tooltip: { enabled: false }
+  }
+}
 
 onMounted(async () => {
   try {
@@ -228,6 +270,21 @@ h1 {
   border-radius: var(--radius-lg);
   padding: 1rem 0.75rem;
   text-align: center;
+}
+
+.stat-ring-mini {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 0.5rem;
+}
+
+.stat-icon-lg {
+  font-size: 1.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.accent-card {
+  border: 1px solid var(--primary-light);
 }
 
 .stat-value {

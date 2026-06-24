@@ -96,6 +96,11 @@ watch(() => authStore.isLoggedIn, async (loggedIn) => {
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  // Initialize dark mode from localStorage
+  const saved = localStorage.getItem('theme')
+  if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.classList.add('dark')
+  }
 })
 
 onUnmounted(() => {

@@ -6,7 +6,7 @@
         <p>公考刷题工具</p>
       </div>
 
-      <div class="tab-switch">
+      <div class="tab-switch" v-if="registrationEnabled">
         <button :class="{ active: mode === 'login' }" @click="mode = 'login'">登录</button>
         <button :class="{ active: mode === 'register' }" @click="mode = 'register'">注册</button>
       </div>
@@ -34,9 +34,9 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { login, register } from '../api/index.js'
+import { login, register, getRegistrationStatus } from '../api/index.js'
 import { useAuthStore } from '../stores/auth.js'
 import { useExamStore } from '../stores/exam.js'
 
@@ -46,6 +46,16 @@ const examStore = useExamStore()
 const mode = ref('login')
 const loading = ref(false)
 const error = ref('')
+const registrationEnabled = ref(false)
+
+onMounted(async () => {
+  try {
+    const res = await getRegistrationStatus()
+    registrationEnabled.value = res.data.data?.enabled ?? false
+  } catch {
+    // 默认不开放注册
+  }
+})
 
 const form = reactive({
   username: '',

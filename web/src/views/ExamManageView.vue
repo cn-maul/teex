@@ -156,8 +156,8 @@ import {
   getExamTypes, getExamModules,
   createExamType, updateExamType, deleteExamType,
   createModule, updateModule, deleteModule,
-  showToast,
 } from '../api'
+import { showToast } from '../utils/toast'
 import { useExamStore } from '../stores/exam'
 import { useConfirm } from '../utils/confirm'
 
@@ -366,12 +366,6 @@ h1 {
 .btn-icon svg { width: 16px; height: 16px; }
 .btn-icon:hover { background: var(--bg-hover); color: var(--primary); }
 .btn-icon.btn-danger:hover { background: var(--error-bg); color: var(--error); }
-
-/* Loading / Empty */
-.loading { text-align: center; padding: 3rem; }
-.spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.empty { text-align: center; padding: 4rem 2rem; color: var(--text-muted); }
 
 /* Exam card */
 .exam-list { display: flex; flex-direction: column; gap: 0.75rem; }

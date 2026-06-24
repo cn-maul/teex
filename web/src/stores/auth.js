@@ -14,6 +14,7 @@ const user = ref(parseUser())
 
 export function useAuthStore() {
   const isLoggedIn = computed(() => !!token.value)
+  const isAdmin = computed(() => user.value?.role === 'admin')
 
   function setAuth(tokenVal, userVal) {
     token.value = tokenVal
@@ -29,5 +30,5 @@ export function useAuthStore() {
     localStorage.removeItem('user')
   }
 
-  return reactive({ isLoggedIn, user, token, setAuth, logout })
+  return reactive({ isLoggedIn, isAdmin, user, token, setAuth, logout })
 }

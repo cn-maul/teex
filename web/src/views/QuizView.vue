@@ -91,7 +91,7 @@
       </div>
 
       <div class="exam-actions">
-        <button class="btn btn-primary btn-lg" :disabled="answeredCount === 0" @click="submitExam">
+        <button class="btn btn-primary btn-lg" :disabled="answeredCount === 0 || submitting" @click="submitExam">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           交卷
         </button>
@@ -142,6 +142,18 @@
           <div class="result-item">
             <span class="result-value" style="color: var(--text-muted);">{{ examUnanswered }}</span>
             <span class="result-label">未答</span>
+          </div>
+        </div>
+        <div class="result-chart-section">
+          <h3 class="chart-title">题型分布</h3>
+          <div class="chart-container-sm">
+            <Doughnut :data="typeChartData" :options="doughnutOptions" />
+          </div>
+        </div>
+        <div class="result-chart-section">
+          <h3 class="chart-title">难度正确率</h3>
+          <div class="chart-container-sm">
+            <Bar :data="examDifficultyChartData" :options="barOptions" />
           </div>
         </div>
       </div>
@@ -232,6 +244,18 @@
             <div class="result-item">
               <span class="result-value error">{{ wrongCount }}</span>
               <span class="result-label">错误</span>
+            </div>
+          </div>
+          <div class="result-chart-section">
+            <h3 class="chart-title">题型分布</h3>
+            <div class="chart-container-sm">
+              <Doughnut :data="typeChartData" :options="doughnutOptions" />
+            </div>
+          </div>
+          <div class="result-chart-section">
+            <h3 class="chart-title">难度正确率</h3>
+            <div class="chart-container-sm">
+              <Bar :data="analysisDifficultyChartData" :options="barOptions" />
             </div>
           </div>
         </div>
@@ -362,12 +386,23 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { startQuiz, submitAnswer as apiSubmitAnswer, submitBatchAnswers } from '../api'
 import { useExamStore } from '../stores/exam'
+import { useAuthStore } from '../stores/auth'
 import { getTypeLabel, parseOptions, getOptionLetter, getOptionText } from '../utils/quiz'
 import { showToast } from '../utils/toast'
+import { Doughnut, Bar } from 'vue-chartjs'
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js'
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
 
 const route = useRoute()
 const router = useRouter()
 const examStore = useExamStore()
+const authStore = useAuthStore()
+
+// 管理员不能答题，直接拦截
+if (authStore.isAdmin) {
+  loading.value = false
+  loadError.value = '管理员不能参与答题，请使用管理员面板查看数据'
+}
 
 // ====== 通用状态 ======
 const questions = ref([])
@@ -400,6 +435,7 @@ const showExamResults = ref(false)
 const examSessionId = ref(null)
 const examStartTime = ref(0)
 const currentExamIndex = ref(0)      // 当前可视题目索引（用于虚拟渲染优化）
+const submitting = ref(false)         // 防止交卷重复点击
 const examQuestionRefs = {}          // 题目 DOM 引用
 let examObserver = null              // IntersectionObserver 实例
 
@@ -446,6 +482,111 @@ const examWrong = computed(() => {
 const examUnanswered = computed(() => {
   return questions.value.length - examResults.value.length
 })
+
+// ====== Chart 数据 ======
+
+const typeChartData = computed(() => {
+  const counts = { single: 0, multi: 0, judge: 0, fill: 0 }
+  questions.value.forEach(q => { if (counts[q.type] !== undefined) counts[q.type]++ })
+  return {
+    labels: ['单选题', '多选题', '判断题', '填空题'],
+    datasets: [{
+      data: [counts.single, counts.multi, counts.judge, counts.fill],
+      backgroundColor: ['#6366f1', '#8b5cf6', '#10b981', '#f59e0b'],
+      borderWidth: 0,
+      hoverOffset: 4
+    }]
+  }
+})
+
+const examDifficultyChartData = computed(() => {
+  const diffMap = {}
+  questions.value.forEach((q, idx) => {
+    const d = q.difficulty || 1
+    if (!diffMap[d]) diffMap[d] = { correct: 0, total: 0 }
+    if (examResults.value[idx]) {
+      diffMap[d].total++
+      if (examResults.value[idx].is_correct) diffMap[d].correct++
+    }
+  })
+  const levels = [1, 2, 3, 4, 5]
+  return {
+    labels: levels.map(l => `难度 ${l}`),
+    datasets: [{
+      label: '正确率',
+      data: levels.map(l => {
+        const d = diffMap[l]
+        return d && d.total > 0 ? Math.round(d.correct / d.total * 100) : 0
+      }),
+      backgroundColor: ['#10b981', '#34d399', '#f59e0b', '#f97316', '#ef4444'],
+      borderRadius: 6,
+      borderSkipped: false,
+    }]
+  }
+})
+
+const analysisDifficultyChartData = computed(() => {
+  const diffMap = {}
+  questions.value.forEach((q, idx) => {
+    const d = q.difficulty || 1
+    if (!diffMap[d]) diffMap[d] = { correct: 0, total: 0 }
+    if (analysisResults.value[idx]) {
+      diffMap[d].total++
+      if (analysisResults.value[idx].is_correct) diffMap[d].correct++
+    }
+  })
+  const levels = [1, 2, 3, 4, 5]
+  return {
+    labels: levels.map(l => `难度 ${l}`),
+    datasets: [{
+      label: '正确率',
+      data: levels.map(l => {
+        const d = diffMap[l]
+        return d && d.total > 0 ? Math.round(d.correct / d.total * 100) : 0
+      }),
+      backgroundColor: ['#10b981', '#34d399', '#f59e0b', '#f97316', '#ef4444'],
+      borderRadius: 6,
+      borderSkipped: false,
+    }]
+  }
+})
+
+const doughnutOptions = {
+  responsive: true,
+  maintainAspectRatio: true,
+  plugins: {
+    legend: {
+      position: 'bottom',
+      labels: { padding: 12, usePointStyle: true, pointStyleWidth: 8, font: { size: 12 } }
+    }
+  },
+  cutout: '60%'
+}
+
+const barOptions = {
+  responsive: true,
+  maintainAspectRatio: true,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        label: (ctx) => `正确率: ${ctx.raw}%`
+      }
+    }
+  },
+  scales: {
+    y: {
+      beginAtZero: true,
+      max: 100,
+      ticks: { callback: (v) => v + '%', font: { size: 11 } },
+      grid: { color: 'rgba(0,0,0,0.05)' }
+    },
+    x: {
+      ticks: { font: { size: 11 } },
+      grid: { display: false }
+    }
+  }
+}
 
 // ====== 生命周期 ======
 
@@ -717,7 +858,8 @@ function selectExamOption(idx, option) {
 }
 
 async function submitExam() {
-  if (answeredCount.value === 0) return
+  if (answeredCount.value === 0 || submitting.value) return
+  submitting.value = true
 
   // 构建批量提交数据（将总时间均分给每道已答题）
   const answers = []
@@ -755,7 +897,17 @@ async function submitExam() {
     showExamResults.value = true
   } catch (err) {
     console.error('Failed to submit batch answers:', err)
-    showToast('交卷失败，请检查网络后重试', 'error')
+    const status = err.response?.status
+    const serverMsg = err.response?.data?.error
+    if (status === 409) {
+      showToast(serverMsg || '该场次已结束，无法再次交卷', 'error')
+    } else if (status === 404) {
+      showToast(serverMsg || '考试场次不存在', 'error')
+    } else {
+      showToast('交卷失败，请检查网络后重试', 'error')
+    }
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -834,20 +986,6 @@ async function restartQuiz() {
 .loading {
   text-align: center;
   padding: 4rem;
-}
-
-.spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid var(--border);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 0 auto;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 /* ====== Empty ====== */
@@ -964,6 +1102,25 @@ async function restartQuiz() {
   width: 1px;
   height: 2.5rem;
   background: var(--border);
+}
+
+.result-chart-section {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.chart-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.75rem;
+  text-align: center;
+}
+
+.chart-container-sm {
+  max-width: 320px;
+  margin: 0 auto;
 }
 
 .finished-actions {
@@ -1357,12 +1514,12 @@ async function restartQuiz() {
 
 .feedback-success {
   background: var(--success-bg);
-  border: 1px solid #bbf7d0;
+  border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .feedback-error {
   background: var(--error-bg);
-  border: 1px solid #fecaca;
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .feedback-icon {
@@ -1429,49 +1586,6 @@ async function restartQuiz() {
   gap: 0.75rem;
   justify-content: center;
   margin-top: 0.5rem;
-}
-
-.btn {
-  padding: 0.6rem 1.5rem;
-  border: none;
-  border-radius: var(--radius);
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: var(--transition);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.btn-lg {
-  padding: 0.7rem 1.75rem;
-  font-size: 0.95rem;
-}
-
-.btn-primary {
-  background: var(--primary);
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--primary-dark);
-}
-
-.btn-ghost {
-  background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-}
-
-.btn-ghost:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: var(--text-muted);
 }
 
 /* Mobile */

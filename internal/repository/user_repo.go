@@ -70,18 +70,6 @@ func UpdatePassword(userID uint, hashedPassword string) error {
 	return database.DB.Model(&model.User{}).Where("id = ?", userID).Update("password", hashedPassword).Error
 }
 
-// UpdateUserRole 更新用户角色
-func UpdateUserRole(id uint, role string) error {
-	return database.DB.Model(&model.User{}).Where("id = ?", id).Update("role", role).Error
-}
-
-// UpdateUserAdmin 管理员更新用户信息（昵称）
-func UpdateUserAdmin(id uint, nickname string) error {
-	return database.DB.Model(&model.User{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"nickname": nickname,
-	}).Error
-}
-
 // UpdateUserFields 按字段批量更新用户（单次 SQL，原子操作）
 func UpdateUserFields(id uint, updates map[string]interface{}) error {
 	return database.DB.Model(&model.User{}).Where("id = ?", id).Updates(updates).Error

@@ -3,6 +3,8 @@ package response
 import (
 	"net/http"
 
+	"exam-quiz/internal/apperr"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -29,5 +31,13 @@ func List(c *gin.Context, data interface{}, total int64) {
 
 // Error sends an error response with the given HTTP status code.
 func Error(c *gin.Context, code int, msg string) {
+	c.JSON(code, gin.H{"error": msg})
+}
+
+// HandleError sends a unified error response. If err is an *apperr.AppError,
+// its safe Message and HTTP code are used. Otherwise a generic fallback is sent.
+func HandleError(c *gin.Context, err error) {
+	code := apperr.HTTPStatus(err)
+	msg := apperr.SafeMessage(err, "操作失败，请稍后重试")
 	c.JSON(code, gin.H{"error": msg})
 }

@@ -79,8 +79,9 @@
 import { ref, computed, watch } from 'vue'
 import {
   getQuestions, createQuestion, updateQuestion, deleteQuestion,
-  getExamModules, importQuestions, batchDeleteQuestions, showToast,
+  getExamModules, importQuestions, batchDeleteQuestions,
 } from '../api'
+import { showToast } from '../utils/toast'
 import { useExamStore } from '../stores/exam'
 import { useConfirm } from '../utils/confirm'
 import QuestionTable from '../components/questions/QuestionTable.vue'

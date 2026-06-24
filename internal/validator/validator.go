@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"exam-quiz/internal/model"
+	"exam-quiz/internal/response"
 
 	"github.com/gin-gonic/gin"
 )
@@ -74,4 +75,23 @@ func ParseOptionalInt(c *gin.Context, name string, defaultVal int) int {
 	}
 	v, _ := strconv.Atoi(s)
 	return v
+}
+
+// GetUserID extracts the authenticated user's ID from the gin context.
+// Returns (userID, true) on success. On failure it sends an error response,
+// calls c.Abort() and returns (0, false).
+func GetUserID(c *gin.Context) (uint, bool) {
+	userIDRaw, exists := c.Get("user_id")
+	if !exists {
+		response.Error(c, 401, "未登录")
+		c.Abort()
+		return 0, false
+	}
+	userID, ok := userIDRaw.(uint)
+	if !ok {
+		response.Error(c, 401, "认证信息无效")
+		c.Abort()
+		return 0, false
+	}
+	return userID, true
 }

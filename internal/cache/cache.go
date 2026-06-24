@@ -27,7 +27,8 @@ func Get(key string) (interface{}, bool) {
 		if time.Now().Before(entry.ExpiresAt) {
 			return entry.Data, true
 		}
-		store.Delete(key)
+		// Atomically delete only if the entry hasn't been refreshed by another goroutine
+		store.CompareAndDelete(key, val)
 	}
 	return nil, false
 }
@@ -49,6 +50,7 @@ func InvalidateUserStats(userID uint) {
 func InvalidateModuleStats(moduleID, userID uint) {
 	Delete(fmt.Sprintf("overall_stats:%d", userID))
 	Delete(fmt.Sprintf("module_stats:%d:%d", moduleID, userID))
+	Delete(fmt.Sprintf("dashboard_stats:%d", userID))
 }
 
 // InvalidateAll clears the entire cache. Used when admin modifies questions/exams/modules.

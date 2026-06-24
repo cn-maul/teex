@@ -1,5 +1,7 @@
 <template>
-  <div class="home">
+  <AdminDashboardView v-if="authStore.isAdmin" />
+
+  <div v-else class="home">
     <div v-if="loading" class="loading">
       <div class="spinner"></div>
     </div>
@@ -16,7 +18,32 @@
       <p>暂无模块数据</p>
     </div>
 
-    <div v-else class="module-grid">
+    <div v-else class="page-header">
+      <div>
+        <h1>刷题练习</h1>
+        <p class="page-desc">{{ examStore.state.currentExamName || '请选择考试类型' }}</p>
+      </div>
+      <div class="quick-stats" v-if="modules.length > 0">
+        <div class="quick-stat">
+          <span class="quick-stat-value">{{ totalQuestions }}</span>
+          <span class="quick-stat-label">总题数</span>
+        </div>
+        <div class="quick-stat">
+          <span class="quick-stat-value">{{ totalAnswered }}</span>
+          <span class="quick-stat-label">已完成</span>
+        </div>
+        <div class="quick-stat">
+          <span class="quick-stat-value accent">{{ overallAccuracy }}%</span>
+          <span class="quick-stat-label">正确率</span>
+        </div>
+        <div class="quick-stat">
+          <span class="quick-stat-value">{{ completionRate }}%</span>
+          <span class="quick-stat-label">完成率</span>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="modules.length > 0" class="module-grid">
       <div 
         v-for="(mod, index) in modules" 
         :key="mod.id"
@@ -24,7 +51,7 @@
         :style="{ '--delay': index * 0.05 + 's' }"
       >
         <div class="module-card-header">
-          <div class="module-icon" :class="'icon-' + (index % 4)">
+          <div class="module-icon" :class="'icon-' + (index % 6)">
             {{ getModuleIcon(mod.name) }}
           </div>
           <div class="module-meta">
@@ -44,7 +71,7 @@
           </div>
         </div>
 
-        <div class="module-actions">
+        <div class="module-actions" v-if="!authStore.isAdmin">
           <button class="btn btn-primary" @click="startQuiz(mod.id, 'default')">
             开始刷题
           </button>
@@ -62,20 +89,52 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { getExamModules } from '../api'
+import { getExamModules, getExamStats } from '../api'
 import { useExamStore } from '../stores/exam'
+import { useAuthStore } from '../stores/auth'
+import AdminDashboardView from './AdminDashboardView.vue'
 
 const router = useRouter()
 const examStore = useExamStore()
+const authStore = useAuthStore()
 
 const modules = ref([])
 const loading = ref(false)
+const correctCount = ref(0)
+const examAnswered = ref(0)
+
+const totalQuestions = computed(() => modules.value.reduce((s, m) => s + (m.question_count || 0), 0))
+const totalAnswered = computed(() => examAnswered.value)
+const overallAccuracy = computed(() => {
+  const total = totalAnswered.value
+  if (total === 0) return 0
+  return Math.round(correctCount.value / total * 100)
+})
+const completionRate = computed(() => {
+  const total = totalQuestions.value
+  if (total === 0) return 0
+  return Math.round(totalAnswered.value / total * 100)
+})
 
 function getModuleIcon(name) {
-  if (!name) return '—'
-  return name.charAt(0)
+  if (!name) return '📚'
+  if (name.includes('言语')) return '📝'
+  if (name.includes('数量') || name.includes('数学')) return '🔢'
+  if (name.includes('判断') || name.includes('逻辑')) return '🧩'
+  if (name.includes('资料')) return '📊'
+  if (name.includes('常识')) return '💡'
+  if (name.includes('申论')) return '✍️'
+  if (name.includes('政治')) return '⚖️'
+  if (name.includes('法律')) return '📜'
+  if (name.includes('经济')) return '💰'
+  if (name.includes('科技') || name.includes('计算机')) return '💻'
+  if (name.includes('历史')) return '🏛️'
+  if (name.includes('地理')) return '🌍'
+  if (name.includes('农业') || name.includes('农村')) return '🌾'
+  if (name.includes('公文')) return '📋'
+  return '📚'
 }
 
 async function loadModules() {
@@ -83,8 +142,15 @@ async function loadModules() {
   if (!localStorage.getItem('token')) return
   loading.value = true
   try {
-    const res = await getExamModules(examStore.state.currentExamId)
-    modules.value = res.data.data || []
+    const [modRes, statsRes] = await Promise.all([
+      getExamModules(examStore.state.currentExamId),
+      getExamStats(examStore.state.currentExamId)
+    ])
+    modules.value = modRes.data.data || []
+    // Both correctCount and totalAnswered come from the same stats API for consistent scope
+    const examStats = statsRes.data.data || []
+    correctCount.value = examStats.reduce((sum, m) => sum + (m.correct_count || 0), 0)
+    examAnswered.value = examStats.reduce((sum, m) => sum + (m.total_answered || 0), 0)
   } catch (err) {
     console.error('Failed to load modules:', err)
   } finally {
@@ -114,29 +180,48 @@ function startQuiz(moduleId, mode) {
   padding: 4rem;
 }
 
-.spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid var(--border);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 0 auto;
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.75rem;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.page-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0.15rem;
 }
 
-.empty {
-  text-align: center;
-  padding: 4rem 2rem;
+.page-desc {
+  font-size: 0.9rem;
   color: var(--text-muted);
 }
 
-.empty-icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
+.quick-stats {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.quick-stat {
+  text-align: center;
+}
+
+.quick-stat-value {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.quick-stat-value.accent { color: var(--primary); }
+
+.quick-stat-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 .module-grid {
@@ -148,12 +233,20 @@ function startQuiz(moduleId, mode) {
 .module-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
+  border-top: 3px solid var(--primary);
   border-radius: var(--radius-lg);
   padding: 1.25rem;
   transition: var(--transition);
   animation: fadeIn 0.3s ease backwards;
   animation-delay: var(--delay);
 }
+
+.module-card:nth-child(6n+1) { border-top-color: #6366f1; }
+.module-card:nth-child(6n+2) { border-top-color: #f59e0b; }
+.module-card:nth-child(6n+3) { border-top-color: #10b981; }
+.module-card:nth-child(6n+4) { border-top-color: #8b5cf6; }
+.module-card:nth-child(6n+5) { border-top-color: #ec4899; }
+.module-card:nth-child(6n+6) { border-top-color: #3b82f6; }
 
 @keyframes fadeIn {
   from {
@@ -175,22 +268,24 @@ function startQuiz(moduleId, mode) {
 }
 
 .module-icon {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1rem;
+  font-size: 1.4rem;
   font-weight: 700;
   color: var(--text-secondary);
   border-radius: var(--radius-lg);
   flex-shrink: 0;
 }
 
-.icon-0 { background: #eef2ff; }
-.icon-1 { background: #fef3c7; }
-.icon-2 { background: #d1fae5; }
-.icon-3 { background: #ede9fe; }
+.icon-0 { background: #eef2ff; }  /* indigo */
+.icon-1 { background: #fef3c7; }  /* amber */
+.icon-2 { background: #d1fae5; }  /* emerald */
+.icon-3 { background: #ede9fe; }  /* violet */
+.icon-4 { background: #fce7f3; }  /* pink */
+.icon-5 { background: #dbeafe; }  /* blue */
 
 .module-meta {
   flex: 1;
@@ -223,13 +318,6 @@ function startQuiz(moduleId, mode) {
   overflow: hidden;
 }
 
-.progress-fill {
-  height: 100%;
-  background: var(--primary);
-  border-radius: 3px;
-  transition: width 0.5s ease;
-}
-
 .module-actions {
   display: flex;
   gap: 0.5rem;
@@ -238,36 +326,8 @@ function startQuiz(moduleId, mode) {
 .btn {
   flex: 1;
   padding: 0.55rem 0.875rem;
-  border: none;
   border-radius: var(--radius);
   font-size: 0.85rem;
   font-weight: 500;
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: var(--primary);
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--primary-dark);
-}
-
-.btn-ghost {
-  background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-}
-
-.btn-ghost:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: var(--text-muted);
 }
 </style>
