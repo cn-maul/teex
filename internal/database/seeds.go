@@ -57,20 +57,13 @@ func ensureAdmin() {
 	if count == 0 {
 		password := os.Getenv("ADMIN_PASSWORD")
 		if password == "" {
-			var err error
-			password, err = generateRandomPassword(16)
-			if err != nil {
-				slog.Warn("failed to generate random admin password", "error", err)
-				return
-			}
-			fmt.Println("╔══════════════════════════════════════════════════════════════╗")
-			fmt.Println("║  WARNING: ADMIN_PASSWORD was not set.                       ║")
-			fmt.Println("║  A random password has been generated for the admin account.║")
-			fmt.Println("║  SAVE THIS PASSWORD — it will NOT be shown again.           ║")
-			fmt.Printf("║  Username: admin / Password: %-31s ║\n", password)
-			fmt.Println("║                                                             ║")
-			fmt.Println("║  Set ADMIN_PASSWORD env var to control the initial password. ║")
-			fmt.Println("╚══════════════════════════════════════════════════════════════╝")
+			password = "admin123"
+			fmt.Println("╔══════════════════════════════════════════════════════════╗")
+			fmt.Println("║  Default admin account created.                         ║")
+			fmt.Println("║  Username: admin  /  Password: admin123                 ║")
+			fmt.Println("║  Please change the password after first login!          ║")
+			fmt.Println("║  Set ADMIN_PASSWORD env var to use a custom password.   ║")
+			fmt.Println("╚══════════════════════════════════════════════════════════╝")
 		}
 
 		hashedPassword, err := util.HashPassword(password)

@@ -29,16 +29,18 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // 清除认证状态
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      // 防止循环重定向：只跳转一次
-      if (!isRedirectingToLogin) {
-        isRedirectingToLogin = true
-        // 用 location.replace 避免在 history 中留下可回退的记录
-        window.location.replace('/login')
-        // 重置标记，防止导航被取消后标记永久残留
-        setTimeout(() => { isRedirectingToLogin = false }, 2000)
+      // 登录接口本身返回 401 时不触发重定向，只让调用方处理错误
+      const isLoginRequest = error.config?.url?.includes('/auth/login')
+      if (!isLoginRequest) {
+        // 清除认证状态
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        // 防止循环重定向：只跳转一次
+        if (!isRedirectingToLogin) {
+          isRedirectingToLogin = true
+          window.location.replace('/login')
+          setTimeout(() => { isRedirectingToLogin = false }, 2000)
+        }
       }
       return Promise.reject(error)
     }
