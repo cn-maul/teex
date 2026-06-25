@@ -1,7 +1,5 @@
 <template>
-  <AdminDashboardView v-if="authStore.isAdmin" />
-
-  <div v-else class="home">
+  <div class="home">
     <div v-if="loading" class="loading">
       <div class="spinner"></div>
     </div>
@@ -94,7 +92,6 @@ import { useRouter } from 'vue-router'
 import { getExamModules, getExamStats } from '../api'
 import { useExamStore } from '../stores/exam'
 import { useAuthStore } from '../stores/auth'
-import AdminDashboardView from './AdminDashboardView.vue'
 
 const router = useRouter()
 const examStore = useExamStore()
@@ -329,5 +326,18 @@ function startQuiz(moduleId, mode) {
   border-radius: var(--radius);
   font-size: 0.85rem;
   font-weight: 500;
+}
+
+@media (max-width: 768px) {
+  .quick-stats {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .module-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

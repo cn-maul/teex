@@ -7,7 +7,6 @@
       :user="authStore.user"
       :editing-nickname="editingNickname"
       :new-nickname="newNickname"
-      :format-date="formatDate"
       @start-edit-nickname="startEditNickname"
       @update:new-nickname="newNickname = $event"
       @save-nickname="saveNickname"
@@ -79,7 +78,6 @@ import { ref, onMounted, computed } from 'vue'
 import { useExamStore } from '../stores/exam'
 import { useAuthStore } from '../stores/auth.js'
 import { deleteRecords, getStats, updateProfile, changePassword, getRegistrationStatus, setRegistrationStatus } from '../api'
-import { formatDate } from '../utils/format'
 import { showToast } from '../utils/toast'
 import { useConfirm } from '../utils/confirm'
 import ProfileSection from '../components/settings/ProfileSection.vue'
@@ -230,32 +228,6 @@ h1 {
   font-weight: 700;
   color: var(--text);
   margin-bottom: 1.75rem;
-}
-
-.settings-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  padding: 1.5rem;
-  margin-bottom: 1rem;
-}
-
-.section-header {
-  margin-bottom: 1.25rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border-light);
-}
-
-.section-header h2 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 0.15rem;
-}
-
-.section-desc {
-  font-size: 0.85rem;
-  color: var(--text-muted);
 }
 
 /* Stats grid */

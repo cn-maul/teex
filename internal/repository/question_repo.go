@@ -90,6 +90,7 @@ func BatchDeleteQuestions(ids []uint) (int, error) {
 	if len(ids) == 0 {
 		return 0, nil
 	}
+	var deleted int64
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		// Delete related user answers first
 		if err := tx.Where("question_id IN ?", ids).Delete(&model.UserAnswer{}).Error; err != nil {
@@ -100,12 +101,13 @@ func BatchDeleteQuestions(ids []uint) (int, error) {
 		if result.Error != nil {
 			return result.Error
 		}
+		deleted = result.RowsAffected
 		return nil
 	})
 	if err != nil {
 		return 0, err
 	}
-	return len(ids), nil
+	return int(deleted), nil
 }
 
 // UpdateQuestion 更新题目（不覆盖 CreatedAt）

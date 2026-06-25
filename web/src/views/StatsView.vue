@@ -110,7 +110,7 @@
               </span>
             </div>
             <div class="recent-stats">
-              <span class="recent-accuracy" :style="{ color: getAccColor(s.accuracy) }">{{ s.accuracy }}%</span>
+              <span class="recent-accuracy" :style="{ color: getAccuracyColor(s.accuracy) }">{{ s.accuracy }}%</span>
               <span class="recent-detail">{{ s.correct_count }}/{{ s.total_count }}</span>
             </div>
           </div>
@@ -123,6 +123,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getDashboardStats } from '../api'
+import { TYPE_LABELS } from '../utils/quiz'
+import { getAccuracyColor } from '../utils/format'
 import { Line, Bar, Radar } from 'vue-chartjs'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, RadialLinearScale, Filler, Tooltip, Legend } from 'chart.js'
 
@@ -153,8 +155,6 @@ async function loadDashboard() {
 }
 
 // ===== Chart Data =====
-
-const TYPE_LABELS = { single: '单选', multi: '多选', judge: '判断', fill: '填空' }
 
 const trendData = computed(() => {
   const stats = dashboard.value.daily_stats || []
@@ -279,12 +279,6 @@ const dailyBarOptions = {
     y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: 'rgba(0,0,0,0.05)' } },
     x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 10 }, grid: { display: false } }
   }
-}
-
-function getAccColor(acc) {
-  if (acc >= 80) return '#10b981'
-  if (acc >= 60) return '#f59e0b'
-  return '#ef4444'
 }
 </script>
 

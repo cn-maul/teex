@@ -39,7 +39,7 @@
               <button class="btn-icon" @click="openEditModal(user)" title="编辑">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               </button>
-              <button v-if="user.id !== authStore.user?.id" class="btn-icon btn-danger" @click="confirmDelete(user)" title="删除">
+              <button v-if="user.id !== authStore.user?.id" class="btn-icon btn-icon-danger" @click="confirmDelete(user)" title="删除">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
               </button>
             </td>
@@ -53,7 +53,7 @@
     <!-- 新增/编辑弹窗 -->
     <Transition name="modal">
       <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
-        <div class="modal">
+        <div class="modal-container">
           <div class="modal-header">
             <h2>{{ editingUser ? '编辑用户' : '新增用户' }}</h2>
             <button class="modal-close" @click="closeModal">
@@ -153,10 +153,12 @@ async function saveUser() {
   try {
     if (editingUser.value) {
       const data = {}
-      if (form.value.nickname) data.nickname = form.value.nickname
+      if (form.value.nickname !== undefined && form.value.nickname !== editingUser.value.nickname) {
+        data.nickname = form.value.nickname
+      }
       if (form.value.new_password) data.new_password = form.value.new_password
       if (form.value.role !== editingUser.value.role) data.role = form.value.role
-      if (!data.nickname && !data.new_password && !data.role) {
+      if (!('nickname' in data) && !data.new_password && !data.role) {
         showToast('请提供需要修改的信息', 'error')
         saving.value = false
         return
@@ -219,45 +221,6 @@ async function confirmDelete(user) {
   margin: 0;
 }
 
-/* Buttons */
-.btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: var(--radius);
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: var(--transition);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.btn svg {
-  width: 16px;
-  height: 16px;
-}
-
-.btn-primary { background: var(--primary); color: white; }
-
-.btn-ghost { background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border); }
-.btn-ghost:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--text-muted); }
-
-.btn-icon {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0.3rem;
-  border-radius: var(--radius-sm);
-  transition: var(--transition);
-  color: var(--text-muted);
-  display: inline-flex;
-}
-
-.btn-icon svg { width: 16px; height: 16px; }
-.btn-icon:hover { background: var(--bg-hover); color: var(--primary); }
-.btn-icon.btn-danger:hover { background: var(--error-bg); color: var(--error); }
-
 /* Loading / Empty */
 .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto; }
 
@@ -301,8 +264,6 @@ async function confirmDelete(user) {
   background: var(--bg-hover);
 }
 
-.cell-actions { white-space: nowrap; }
-
 .role-tag {
   display: inline-block;
   padding: 0.15rem 0.55rem;
@@ -326,110 +287,6 @@ async function confirmDelete(user) {
   padding: 2rem;
   color: var(--text-muted);
   font-size: 0.85rem;
-}
-
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal {
-  background: var(--bg-card);
-  border-radius: var(--radius-xl);
-  width: 92%;
-  max-width: 440px;
-  max-height: 85vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-lg);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.modal-header h2 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--text);
-  margin: 0;
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-muted);
-  padding: 0.25rem;
-  border-radius: var(--radius-sm);
-  transition: var(--transition);
-  display: flex;
-}
-
-.modal-close svg { width: 18px; height: 18px; }
-.modal-close:hover { background: var(--bg-hover); color: var(--text); }
-
-.modal-body { padding: 1.25rem 1.5rem; }
-
-.form-group { margin-bottom: 1rem; }
-.form-group label {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  margin-bottom: 0.3rem;
-}
-
-.form-input {
-  width: 100%;
-  padding: 0.55rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 0.875rem;
-  color: var(--text);
-  background: var(--bg-card);
-  outline: none;
-  transition: var(--transition);
-  box-sizing: border-box;
-}
-
-.form-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-bg);
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid var(--border);
-}
-
-/* Modal transitions */
-.modal-enter-active,
-.modal-leave-active {
-  transition: all 0.2s ease;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
-.modal-enter-from .modal,
-.modal-leave-to .modal {
-  transform: scale(0.95) translateY(8px);
 }
 
 /* Mobile */

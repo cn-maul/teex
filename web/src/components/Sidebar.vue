@@ -74,26 +74,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth.js'
 import { useRouter } from 'vue-router'
 import { useConfirm } from '../utils/confirm'
+import { useDarkMode } from '../utils/darkMode'
 
 const { showConfirm } = useConfirm()
 const authStore = useAuthStore()
 const router = useRouter()
-
-const isDark = ref(false)
-
-onMounted(() => {
-  isDark.value = document.documentElement.classList.contains('dark')
-})
-
-function toggleDark() {
-  isDark.value = !isDark.value
-  document.documentElement.classList.toggle('dark', isDark.value)
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
-}
+const { isDark, toggle: toggleDark } = useDarkMode()
 
 async function handleLogout() {
   if (!await showConfirm({ message: '确定要退出登录吗？' })) return

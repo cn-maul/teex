@@ -10,6 +10,7 @@ const state = reactive({
   currentExamName: '',
   examList: [],
   loading: false,
+  lastFetchedAt: 0, // 上次加载考试列表的时间戳
 })
 
 // 设置状态
@@ -63,23 +64,28 @@ function initFromStorage() {
 initFromStorage()
 
 export function useExamStore() {
-  // 加载考试列表
-  async function loadExams() {
-    if (state.examList.length > 0) return
-    // 未登录时不加载
-    if (!localStorage.getItem('token')) return
+  // 内部：拉取考试列表并更新状态
+  async function _fetchExams() {
     state.loading = true
     try {
       const res = await getExamTypes()
       state.examList = res.data.data || []
-      // 如果没有选中考试，自动选第一个
-      if (!state.currentExamId && state.examList.length > 0) {
-        setExam(state.examList[0])
-      }
+      state.lastFetchedAt = Date.now()
     } catch (err) {
       console.error('Failed to load exams:', err)
     } finally {
       state.loading = false
+    }
+  }
+
+  // 加载考试列表（5 分钟内使用缓存）
+  async function loadExams() {
+    const CACHE_TTL = 5 * 60 * 1000 // 5 分钟
+    if (state.examList.length > 0 && Date.now() - state.lastFetchedAt < CACHE_TTL) return
+    if (!localStorage.getItem('token')) return
+    await _fetchExams()
+    if (!state.currentExamId && state.examList.length > 0) {
+      setExam(state.examList[0])
     }
   }
 
@@ -97,24 +103,16 @@ export function useExamStore() {
 
   // 强制刷新考试列表（用于增删后同步下拉菜单）
   async function refreshExams() {
-    state.loading = true
-    try {
-      const res = await getExamTypes()
-      state.examList = res.data.data || []
-      const stillExists = state.examList.some(e => e.id === state.currentExamId)
-      if (!stillExists) {
-        if (state.examList.length > 0) {
-          setExam(state.examList[0])
-        } else {
-          state.currentExamId = null
-          state.currentExamName = ''
-          localStorage.removeItem(STORAGE_KEY)
-        }
+    await _fetchExams()
+    const stillExists = state.examList.some(e => e.id === state.currentExamId)
+    if (!stillExists) {
+      if (state.examList.length > 0) {
+        setExam(state.examList[0])
+      } else {
+        state.currentExamId = null
+        state.currentExamName = ''
+        localStorage.removeItem(STORAGE_KEY)
       }
-    } catch (err) {
-      console.error('Failed to refresh exams:', err)
-    } finally {
-      state.loading = false
     }
   }
 

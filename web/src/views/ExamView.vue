@@ -409,4 +409,18 @@ h1 {
 .btn-secondary:hover {
   background: var(--bg-hover);
 }
+
+@media (max-width: 768px) {
+  .module-grid {
+    grid-template-columns: 1fr;
+  }
+
+  h1 {
+    font-size: 1.3rem;
+  }
+
+  .module-stats {
+    gap: 1rem;
+  }
+}
 </style>

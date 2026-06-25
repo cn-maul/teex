@@ -1,7 +1,7 @@
 <template>
   <Transition name="modal">
     <div class="modal-overlay" v-if="visible" @click.self="$emit('close')">
-      <div class="modal">
+      <div class="modal-container">
         <div class="modal-header">
           <h2>{{ editingQuestion ? '编辑题目' : '新增题目' }}</h2>
           <button class="modal-close" @click="$emit('close')">
@@ -131,98 +131,7 @@ function handleSave() {
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal {
-  background: var(--bg-card);
-  border-radius: var(--radius-xl);
-  width: 92%;
-  max-width: 560px;
-  max-height: 85vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-lg);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.modal-header h2 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--text);
-  margin: 0;
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-muted);
-  padding: 0.25rem;
-  border-radius: var(--radius-sm);
-  transition: var(--transition);
-  display: flex;
-}
-
-.modal-close svg {
-  width: 18px;
-  height: 18px;
-}
-
-.modal-close:hover {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-.modal-body {
-  padding: 1.25rem 1.5rem;
-}
-
-.form-group {
-  margin-bottom: 1rem;
-}
-
-.form-group label {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  margin-bottom: 0.3rem;
-}
-
-.form-input {
-  width: 100%;
-  padding: 0.55rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 0.875rem;
-  color: var(--text);
-  background: var(--bg-card);
-  outline: none;
-  transition: var(--transition);
-}
-
-.form-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-bg);
-}
-
 .form-input.textarea {
-  resize: vertical;
   min-height: 72px;
 }
 
@@ -237,86 +146,14 @@ function handleSave() {
   gap: 0.85rem;
 }
 
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid var(--border);
-}
-
-.btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: var(--radius);
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: var(--transition);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: var(--primary);
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--primary-dark);
-}
-
-.btn-ghost {
-  background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-}
-
-.btn-ghost:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: var(--text-muted);
-}
-
-/* Modal transition */
-.modal-enter-active, .modal-leave-active {
-  transition: all 0.2s ease;
-}
-
-.modal-enter-from, .modal-leave-to {
-  opacity: 0;
-}
-
-.modal-enter-from .modal, .modal-leave-to .modal {
-  transform: scale(0.95) translateY(8px);
+.modal-container {
+  max-width: 560px;
 }
 
 @media (max-width: 768px) {
-  .modal {
-    width: 96%;
-    max-height: 90vh;
-  }
-
-  .modal-header {
-    padding: 1rem 1.25rem;
-  }
-
-  .modal-body {
-    padding: 1rem 1.25rem;
-  }
-
   .form-row {
     grid-template-columns: 1fr;
     gap: 0;
-  }
-
-  .modal-footer {
-    padding: 0.75rem 1.25rem;
   }
 }
 </style>

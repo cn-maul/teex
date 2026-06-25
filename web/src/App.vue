@@ -77,6 +77,7 @@ import Sidebar from './components/Sidebar.vue'
 import StatsPanel from './components/StatsPanel.vue'
 import ConfirmModal from './components/ConfirmModal.vue'
 import { useConfirm } from './utils/confirm'
+import { useDarkMode } from './utils/darkMode'
 
 const { confirmState, handleConfirm, handleCancel } = useConfirm()
 
@@ -96,11 +97,7 @@ watch(() => authStore.isLoggedIn, async (loggedIn) => {
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
-  // Initialize dark mode from localStorage
-  const saved = localStorage.getItem('theme')
-  if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    document.documentElement.classList.add('dark')
-  }
+  useDarkMode().init()
 })
 
 onUnmounted(() => {

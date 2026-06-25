@@ -108,11 +108,6 @@ function goToPage(val) {
   overflow: hidden;
 }
 
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
 .data-table th {
   background: var(--bg-hover);
   padding: 0.65rem 0.85rem;
@@ -132,17 +127,8 @@ function goToPage(val) {
   color: var(--text);
 }
 
-.data-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
 .row-alt {
   background: #fafbfc;
-}
-
-.cell-id {
-  color: var(--text-muted);
-  font-size: 0.8rem;
 }
 
 .type-badge {
@@ -179,37 +165,6 @@ function goToPage(val) {
   color: var(--warning);
 }
 
-.cell-actions {
-  white-space: nowrap;
-}
-
-.btn-icon {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0.3rem;
-  border-radius: var(--radius-sm);
-  transition: var(--transition);
-  color: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-}
-
-.btn-icon svg {
-  width: 16px;
-  height: 16px;
-}
-
-.btn-icon:hover {
-  background: var(--bg-hover);
-  color: var(--primary);
-}
-
-.btn-icon-danger:hover {
-  background: var(--error-bg);
-  color: var(--error);
-}
-
 .row-checkbox {
   width: 16px;
   height: 16px;
@@ -227,57 +182,6 @@ function goToPage(val) {
   padding: 2.5rem !important;
 }
 
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 1.25rem;
-}
-
-.btn-page {
-  padding: 0.45rem 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-card);
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.btn-page:hover:not(:disabled) {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.btn-page:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.page-info {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-.page-input {
-  width: 60px;
-  padding: 0.4rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-card);
-  color: var(--text);
-  font-size: 0.85rem;
-  text-align: center;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.page-input:focus {
-  border-color: var(--primary);
-}
-
 @media (max-width: 768px) {
   .table-container {
     overflow-x: auto;
@@ -290,20 +194,6 @@ function goToPage(val) {
 
   .cell-content {
     max-width: 180px;
-  }
-
-  .pagination {
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .btn-page {
-    padding: 0.4rem 0.7rem;
-    font-size: 0.8rem;
-  }
-
-  .page-info {
-    font-size: 0.8rem;
   }
 }
 </style>

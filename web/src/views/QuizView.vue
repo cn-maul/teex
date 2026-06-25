@@ -78,12 +78,12 @@
                 v-for="(option, oi) in parseOptions(q.options)"
                 :key="oi"
                 class="option"
-                :class="{ selected: examSelectedAnswers[idx] === getOptionLetter(option) }"
+                :class="{ selected: isExamOptionSelected(idx, option) }"
                 @click="selectExamOption(idx, option)"
               >
                 <span class="option-letter">{{ getOptionLetter(option) }}</span>
                 <span class="option-text">{{ getOptionText(option) }}</span>
-                <svg v-if="examSelectedAnswers[idx] === getOptionLetter(option)" class="option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <svg v-if="isExamOptionSelected(idx, option)" class="option-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
               </div>
             </div>
           </div>
@@ -186,9 +186,9 @@
               :key="oi"
               class="analysis-option"
               :class="{
-                'aopt-selected': examSelectedAnswers[idx] === getOptionLetter(option),
-                'aopt-correct': q.type === 'multi' ? (q.answer || '').split(',').map(s => s.trim()).includes(getOptionLetter(option)) : getOptionLetter(option) === q.answer,
-                'aopt-wrong': examSelectedAnswers[idx] === getOptionLetter(option) && !(q.type === 'multi' ? (q.answer || '').split(',').map(s => s.trim()).includes(getOptionLetter(option)) : getOptionLetter(option) === q.answer)
+                'aopt-selected': isExamOptionSelected(idx, option),
+                'aopt-correct': isExamOptionCorrect(idx, option),
+                'aopt-wrong': isExamOptionSelected(idx, option) && !isExamOptionCorrect(idx, option)
               }"
             >
               <span class="aopt-letter">{{ getOptionLetter(option) }}</span>
@@ -361,7 +361,7 @@
           <button
             v-if="!showFeedback"
             class="btn btn-primary btn-lg"
-            :disabled="currentQuestion.type === 'fill' ? !fillAnswer.trim() : !selectedOption"
+            :disabled="currentQuestion.type === 'fill' ? !fillAnswer.trim() : selectedOptions.size === 0"
             @click="submitSingleAnswer"
           >
             提交答案
@@ -398,17 +398,17 @@ const router = useRouter()
 const examStore = useExamStore()
 const authStore = useAuthStore()
 
-// 管理员不能答题，直接拦截
-if (authStore.isAdmin) {
-  loading.value = false
-  loadError.value = '管理员不能参与答题，请使用管理员面板查看数据'
-}
-
 // ====== 通用状态 ======
 const questions = ref([])
 const loading = ref(true)
 const finished = ref(false)
 const loadError = ref('')
+
+// 管理员不能答题，直接拦截（必须在 ref 声明之后）
+if (authStore.isAdmin) {
+  loading.value = false
+  loadError.value = '管理员不能参与答题，请使用管理员面板查看数据'
+}
 // 只允许 'analysis' 或 'exam'，其他值一律回退到 'analysis'
 const quizMode = computed(() => {
   const mode = examStore.settings.quizMode
@@ -417,7 +417,7 @@ const quizMode = computed(() => {
 
 // ====== 解析模式状态 ======
 const currentIndex = ref(0)
-const selectedOption = ref('')
+const selectedOptions = ref(new Set()) // 多选题支持多选
 const showFeedback = ref(false)
 const isCorrect = ref(false)
 const correctCount = ref(0)
@@ -650,7 +650,7 @@ function handleKeydown(e) {
     e.preventDefault()
     if (showFeedback.value) {
       nextQuestion()
-    } else if (selectedOption.value) {
+    } else if (selectedOptions.value.size > 0) {
       submitSingleAnswer()
     }
     return
@@ -700,7 +700,7 @@ async function loadQuestions() {
     wrongCount.value = 0
     finished.value = false
     showFeedback.value = false
-    selectedOption.value = ''
+    selectedOptions.value = new Set()
     fillAnswer.value = ''
     examSelectedAnswers.value = {}
     examResults.value = []
@@ -734,31 +734,53 @@ async function loadQuestions() {
 
 function isSelected(option) {
   const letter = getOptionLetter(option)
-  return selectedOption.value === letter
+  return selectedOptions.value.has(letter)
 }
 
 function selectOption(option) {
   if (finished.value || showFeedback.value) return
   if (currentQuestion.value.type === 'fill') return
   const letter = getOptionLetter(option)
-  selectedOption.value = letter
+  if (currentQuestion.value.type === 'multi') {
+    // 多选题：切换选中状态
+    const newSet = new Set(selectedOptions.value)
+    if (newSet.has(letter)) {
+      newSet.delete(letter)
+    } else {
+      newSet.add(letter)
+    }
+    selectedOptions.value = newSet
+  } else {
+    // 单选/判断：直接替换
+    selectedOptions.value = new Set([letter])
+  }
 }
 
 function getOptionClass(option) {
   const letter = getOptionLetter(option)
   const classes = []
 
-  if (selectedOption.value === letter) classes.push('selected')
+  if (selectedOptions.value.has(letter)) classes.push('selected')
   if (showFeedback.value) {
-    if (letter === currentQuestion.value.answer) classes.push('correct')
-    else if (selectedOption.value === letter) classes.push('wrong')
+    // 多选题的正确答案可能包含多个字母
+    const correctLetters = new Set((currentQuestion.value.answer || '').split(',').map(s => s.trim()))
+    if (correctLetters.has(letter)) classes.push('correct')
+    else if (selectedOptions.value.has(letter)) classes.push('wrong')
   }
 
   return classes.join(' ')
 }
 
 async function submitSingleAnswer() {
-  const userInput = currentQuestion.value.type === 'fill' ? fillAnswer.value.trim() : selectedOption.value
+  let userInput
+  if (currentQuestion.value.type === 'fill') {
+    userInput = fillAnswer.value.trim()
+  } else if (currentQuestion.value.type === 'multi') {
+    // 多选题：排序后用逗号拼接
+    userInput = [...selectedOptions.value].sort().join(',')
+  } else {
+    userInput = [...selectedOptions.value][0] || ''
+  }
   if (!userInput) return
   try {
     const res = await apiSubmitAnswer({
@@ -782,7 +804,7 @@ async function submitSingleAnswer() {
 function nextQuestion() {
   if (currentIndex.value < questions.value.length - 1) {
     currentIndex.value++
-    selectedOption.value = ''
+    selectedOptions.value = new Set()
     fillAnswer.value = ''
     showFeedback.value = false
     isCorrect.value = false
@@ -844,16 +866,50 @@ watch(currentExamIndex, () => {
 
 // ====== 考试模式逻辑 ======
 
+function isExamOptionSelected(idx, option) {
+  const letter = getOptionLetter(option)
+  const answer = examSelectedAnswers.value[idx] || ''
+  return answer.split(',').includes(letter)
+}
+
+function isExamOptionCorrect(idx, option) {
+  const letter = getOptionLetter(option)
+  const q = questions.value[idx]
+  if (!q) return false
+  return (q.answer || '').split(',').map(s => s.trim()).includes(letter)
+}
+
 function selectExamOption(idx, option) {
   if (showExamResults.value) return
   const letter = getOptionLetter(option)
-  if (examSelectedAnswers.value[idx] === letter) {
-    // 点击已选的则取消
+  const q = questions.value[idx]
+  if (q && q.type === 'multi') {
+    // 多选题：切换选中状态，逗号分隔存储
+    const current = examSelectedAnswers.value[idx] || ''
+    const selected = current ? current.split(',') : []
+    const newSet = new Set(selected)
+    if (newSet.has(letter)) {
+      newSet.delete(letter)
+    } else {
+      newSet.add(letter)
+    }
     const newAnswers = { ...examSelectedAnswers.value }
-    delete newAnswers[idx]
+    const sorted = [...newSet].sort()
+    if (sorted.length === 0) {
+      delete newAnswers[idx]
+    } else {
+      newAnswers[idx] = sorted.join(',')
+    }
     examSelectedAnswers.value = newAnswers
   } else {
-    examSelectedAnswers.value = { ...examSelectedAnswers.value, [idx]: letter }
+    // 单选/判断：直接替换
+    if (examSelectedAnswers.value[idx] === letter) {
+      const newAnswers = { ...examSelectedAnswers.value }
+      delete newAnswers[idx]
+      examSelectedAnswers.value = newAnswers
+    } else {
+      examSelectedAnswers.value = { ...examSelectedAnswers.value, [idx]: letter }
+    }
   }
 }
 

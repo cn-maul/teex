@@ -478,8 +478,30 @@ func GetAdminDashboardStats() (*AdminDashboardStats, error) {
 		Where("created_at >= DATE('now', '-30 days')").
 		Distinct("user_id").Count(&stats.ActiveUsers30d)
 
-	database.DB.Model(&model.UserAnswer{}).Count(&stats.TotalAnswers)
-	database.DB.Model(&model.UserAnswer{}).Where("is_correct = ?", true).Count(&stats.TotalCorrect)
+	// 总答题数和正确数（基于每题最后一次作答）
+	database.DB.Raw(`
+		SELECT COUNT(*) FROM (
+			SELECT ua.is_correct
+			FROM user_answers ua
+			INNER JOIN (
+				SELECT user_id, question_id, MAX(id) as max_id
+				FROM user_answers
+				GROUP BY user_id, question_id
+			) latest ON ua.id = latest.max_id
+		)
+	`).Scan(&stats.TotalAnswers)
+	database.DB.Raw(`
+		SELECT COUNT(*) FROM (
+			SELECT ua.is_correct
+			FROM user_answers ua
+			INNER JOIN (
+				SELECT user_id, question_id, MAX(id) as max_id
+				FROM user_answers
+				GROUP BY user_id, question_id
+			) latest ON ua.id = latest.max_id
+			WHERE ua.is_correct = 1
+		)
+	`).Scan(&stats.TotalCorrect)
 	if stats.TotalAnswers > 0 {
 		stats.Accuracy = math.Round(float64(stats.TotalCorrect) / float64(stats.TotalAnswers) * 100)
 	}

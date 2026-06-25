@@ -94,11 +94,11 @@ async function handleSubmit() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
   padding: 20px;
 }
 .login-card {
-  background: white;
+  background: var(--bg-card);
   border-radius: 16px;
   padding: 40px;
   width: 100%;
@@ -112,17 +112,17 @@ async function handleSubmit() {
 .login-header h1 {
   font-size: 28px;
   margin: 0 0 8px 0;
-  color: #333;
+  color: var(--text);
 }
 .login-header p {
-  color: #888;
+  color: var(--text-muted);
   margin: 0;
   font-size: 14px;
 }
 .tab-switch {
   display: flex;
   margin-bottom: 24px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -130,14 +130,14 @@ async function handleSubmit() {
   flex: 1;
   padding: 10px;
   border: none;
-  background: #f9fafb;
+  background: var(--bg);
   cursor: pointer;
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
   transition: all 0.2s;
 }
 .tab-switch button.active {
-  background: #667eea;
+  background: var(--primary);
   color: white;
 }
 .form-group {
@@ -146,20 +146,22 @@ async function handleSubmit() {
 .form-group input {
   width: 100%;
   padding: 12px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s;
   box-sizing: border-box;
+  background: var(--bg-card);
+  color: var(--text);
 }
 .form-group input:focus {
-  border-color: #667eea;
+  border-color: var(--primary);
 }
 .btn-submit {
   width: 100%;
   padding: 12px;
-  background: #667eea;
+  background: var(--primary);
   color: white;
   border: none;
   border-radius: 8px;
@@ -167,10 +169,10 @@ async function handleSubmit() {
   cursor: pointer;
   transition: background 0.2s;
 }
-.btn-submit:hover { background: #5a6fd6; }
+.btn-submit:hover { background: var(--primary-dark); }
 .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
 .error-msg {
-  color: #ef4444;
+  color: var(--error);
   font-size: 13px;
   text-align: center;
   margin-top: 12px;

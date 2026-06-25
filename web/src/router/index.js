@@ -6,7 +6,7 @@ const routes = [
   { path: '/exam/:id',  name: 'Exam',      component: () => import('../views/ExamView.vue') },
   { path: '/quiz/:moduleId', name: 'Quiz', component: () => import('../views/QuizView.vue') },
   { path: '/history',   name: 'History',   component: () => import('../views/HistoryView.vue') },
-  { path: '/stats',     name: 'Stats',     component: () => import('../views/StatsView.vue'), meta: { requiresAuth: true } },
+  { path: '/stats',     name: 'Stats',     component: () => import('../views/StatsView.vue') },
   { path: '/settings',  name: 'Settings',  component: () => import('../views/SettingsView.vue') },
   { path: '/admin/dashboard', name: 'AdminDashboard', component: () => import('../views/AdminDashboardView.vue'), meta: { admin: true } },
   { path: '/admin/exams', name: 'ExamManage', component: () => import('../views/ExamManageView.vue'), meta: { admin: true } },
@@ -24,6 +24,16 @@ router.beforeEach((to, from, next) => {
     next('/login')
   } else if (to.path === '/login' && token) {
     next('/')
+  } else if (to.path === '/' && token) {
+    // 管理员访问首页时重定向到管理看板
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}')
+      if (user.role === 'admin') {
+        next('/admin/dashboard')
+        return
+      }
+    } catch { /* ignore */ }
+    next()
   } else if (to.meta.admin) {
     // 管理页面需要管理员权限
     try {

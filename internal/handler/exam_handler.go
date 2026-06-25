@@ -201,34 +201,35 @@ func UpdateModule(c *gin.Context) {
 	}
 	module.ID = id
 
-	// Validate exam_type_id exists if provided
-	if module.ExamTypeID > 0 {
-		if err := service.ValidateExamTypeExists(module.ExamTypeID); err != nil {
-			response.HandleError(c, err)
-			return
-		}
+	// 读取现有模块，用于填充未提供的字段
+	existingModule, err := service.GetModule(id)
+	if err != nil {
+		response.HandleError(c, err)
+		return
+	}
+
+	// 如果未提供 exam_type_id，保留原值
+	if module.ExamTypeID == 0 {
+		module.ExamTypeID = existingModule.ExamTypeID
+	}
+
+	// Validate exam_type_id exists
+	if err := service.ValidateExamTypeExists(module.ExamTypeID); err != nil {
+		response.HandleError(c, err)
+		return
 	}
 
 	// Check module name uniqueness under the exam type (exclude current record)
 	if module.Name != "" {
-		examTypeID := module.ExamTypeID
-		if examTypeID == 0 {
-			// If exam_type_id not changed, use the existing module's exam_type_id
-			if existingModule, err := service.GetModule(id); err == nil {
-				examTypeID = existingModule.ExamTypeID
-			}
+		existing, err := service.GetModuleByNameAndExamID(module.Name, module.ExamTypeID)
+		if err == nil && existing.ID != id {
+			response.Error(c, 400, "该考试类型下已存在同名模块")
+			return
 		}
-		if examTypeID > 0 {
-			existing, err := service.GetModuleByNameAndExamID(module.Name, examTypeID)
-			if err == nil && existing.ID != id {
-				response.Error(c, 400, "该考试类型下已存在同名模块")
-				return
-			}
-			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-				slog.Error("update module name check failed", "error", err)
-				response.HandleError(c, err)
-				return
-			}
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			slog.Error("update module name check failed", "error", err)
+			response.HandleError(c, err)
+			return
 		}
 	}
 

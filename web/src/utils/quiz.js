@@ -3,7 +3,7 @@
  */
 
 // 题型标签映射
-const TYPE_LABELS = {
+export const TYPE_LABELS = {
   single: '单选题',
   multi: '多选题',
   judge: '判断题',

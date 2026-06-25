@@ -70,6 +70,7 @@
 
 <script setup>
 import { ref, watch, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { getExamStats } from '../api'
 import { useExamStore } from '../stores/exam'
 import { Radar } from 'vue-chartjs'
@@ -78,6 +79,7 @@ import { Chart as ChartJS, RadialLinearScale, PointElement, LineElement, Filler,
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
 
 const examStore = useExamStore()
+const route = useRoute()
 
 const loading = ref(false)
 const moduleStats = ref([])
@@ -129,6 +131,13 @@ watch(() => examStore.state.currentExamId, async (id) => {
   }
   await loadStats(id)
 }, { immediate: true })
+
+// 从答题页返回时刷新统计数据
+watch(() => route.path, async () => {
+  if (examStore.state.currentExamId) {
+    await loadStats(examStore.state.currentExamId)
+  }
+})
 
 async function loadStats(examId) {
   loading.value = true

@@ -34,32 +34,6 @@ defineEmits(['toggle-registration'])
 </script>
 
 <style scoped>
-.settings-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  padding: 1.5rem;
-  margin-bottom: 1rem;
-}
-
-.section-header {
-  margin-bottom: 1.25rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border-light);
-}
-
-.section-header h2 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 0.15rem;
-}
-
-.section-desc {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
 .setting-item {
   display: flex;
   align-items: center;
@@ -84,10 +58,6 @@ defineEmits(['toggle-registration'])
 .setting-desc {
   font-size: 0.8rem;
   color: var(--text-muted);
-}
-
-.setting-control {
-  flex-shrink: 0;
 }
 
 .toggle-btn {

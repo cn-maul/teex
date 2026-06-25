@@ -119,12 +119,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getAdminDashboardStats } from '../api'
+import { TYPE_LABELS } from '../utils/quiz'
 import { Line, Bar } from 'vue-chartjs'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend } from 'chart.js'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend)
-
-const TYPE_LABELS = { single: '单选', multi: '多选', judge: '判断', fill: '填空' }
 
 const loading = ref(true)
 const error = ref('')

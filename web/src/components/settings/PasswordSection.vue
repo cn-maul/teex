@@ -73,32 +73,6 @@ function cancel() {
 </script>
 
 <style scoped>
-.settings-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  padding: 1.5rem;
-  margin-bottom: 1rem;
-}
-
-.section-header {
-  margin-bottom: 1.25rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border-light);
-}
-
-.section-header h2 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 0.15rem;
-}
-
-.section-desc {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
 .setting-item {
   display: flex;
   align-items: center;
@@ -123,10 +97,6 @@ function cancel() {
 .setting-desc {
   font-size: 0.8rem;
   color: var(--text-muted);
-}
-
-.setting-control {
-  flex-shrink: 0;
 }
 
 .password-form {
@@ -168,49 +138,6 @@ function cancel() {
   display: flex;
   gap: 0.5rem;
   margin-left: 78px;
-}
-
-.btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: var(--radius);
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: var(--transition);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.btn-sm {
-  padding: 0.35rem 0.75rem;
-  font-size: 0.8rem;
-}
-
-.btn-primary {
-  background: var(--primary);
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--primary-dark);
-}
-
-.btn-ghost {
-  background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-}
-
-.btn-ghost:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: var(--text-muted);
 }
 
 @media (max-width: 768px) {

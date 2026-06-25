@@ -53,7 +53,7 @@
                   {{ session.mode === 'exam' ? '考试' : session.mode === 'wrong' ? '错题' : '刷题' }}
                 </span>
               </div>
-              <span class="session-time">{{ formatTime(session.started_at) }}</span>
+              <span class="session-time">{{ formatRelativeTime(session.started_at) }}</span>
             </div>
             
             <div class="session-stats">
@@ -66,7 +66,7 @@
                     :style="{ 
                       strokeDasharray: 100, 
                       strokeDashoffset: 100 - (100 * (session.total_count > 0 ? session.correct_count / session.total_count : 0)),
-                      stroke: getAccuracyColor(session)
+                      stroke: getSessionAccuracyColor(session)
                     }"
                   ></circle>
                 </svg>
@@ -123,7 +123,7 @@
               <span class="modal-stat-label">正确/总题</span>
             </div>
             <div class="modal-stat">
-              <span class="modal-stat-value" :style="{ color: getAccuracyColor(detailSession) }">
+              <span class="modal-stat-value" :style="{ color: getSessionAccuracyColor(detailSession) }">
                 {{ detailSession.total_count > 0 ? Math.round(detailSession.correct_count / detailSession.total_count * 100) : 0 }}%
               </span>
               <span class="modal-stat-label">正确率</span>
@@ -172,7 +172,7 @@ import { ref, computed, onMounted } from 'vue'
 import { Line, Bar } from 'vue-chartjs'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler } from 'chart.js'
 import { getSessions, getSessionAnswers } from '../api'
-import { formatDuration } from '../utils/format'
+import { formatDuration, getAccuracyColor, formatRelativeTime } from '../utils/format'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler)
 
@@ -222,10 +222,14 @@ const dailyActivityData = computed(() => {
     d.setDate(d.getDate() - i)
     const label = `${d.getMonth() + 1}/${d.getDate()}`
     days.push(label)
-    const dayStr = d.toISOString().slice(0, 10)
+    // 使用本地日期而非 UTC
+    const dayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     const count = sessions.value.filter(s => {
       if (!s.started_at) return false
-      return s.started_at.slice(0, 10) === dayStr
+      // 服务器返回的时间戳取本地日期部分
+      const sDate = new Date(s.started_at)
+      const sDateStr = `${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, '0')}-${String(sDate.getDate()).padStart(2, '0')}`
+      return sDateStr === dayStr
     }).length
     counts.push(count)
   }
@@ -341,25 +345,9 @@ function getDotClass(session) {
   return 'dot-bad'
 }
 
-function getAccuracyColor(session) {
-  const accuracy = session.total_count > 0 ? session.correct_count / session.total_count : 0
-  if (accuracy >= 0.8) return '#10b981'
-  if (accuracy >= 0.6) return '#f59e0b'
-  return '#ef4444'
-}
-
-function formatTime(dateStr) {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  const now = new Date()
-  const diff = now - d
-  
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
-  if (diff < 604800000) return `${Math.floor(diff / 86400000)} 天前`
-  
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+function getSessionAccuracyColor(session) {
+  const accuracy = session.total_count > 0 ? Math.round(session.correct_count / session.total_count * 100) : 0
+  return getAccuracyColor(accuracy)
 }
 
 </script>
@@ -567,37 +555,6 @@ h1 {
 .detail-item.unfinished {
   color: var(--text-muted);
   font-style: italic;
-}
-
-/* Pagination */
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  margin-top: 1.5rem;
-}
-
-.page-info {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-.page-input {
-  width: 60px;
-  padding: 0.4rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-card);
-  color: var(--text);
-  font-size: 0.85rem;
-  text-align: center;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.page-input:focus {
-  border-color: var(--primary);
 }
 
 /* Modal */
@@ -841,15 +798,6 @@ h1 {
   .answer-detail {
     flex-direction: column;
     gap: 0.25rem;
-  }
-
-  .pagination {
-    gap: 0.5rem;
-  }
-
-  .pagination .btn {
-    padding: 0.5rem 0.85rem;
-    font-size: 0.8rem;
   }
 
   .history-charts {
