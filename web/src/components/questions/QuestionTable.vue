@@ -128,7 +128,7 @@ function goToPage(val) {
 }
 
 .row-alt {
-  background: #fafbfc;
+  background: var(--bg-hover);
 }
 
 .type-badge {
@@ -173,7 +173,7 @@ function goToPage(val) {
 }
 
 .row-selected {
-  background: #eff6ff !important;
+  background: var(--bg-hover) !important;
 }
 
 .empty-row {
