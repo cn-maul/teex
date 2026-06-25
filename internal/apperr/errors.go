@@ -72,3 +72,8 @@ func SafeMessage(err error, fallback string) string {
 	}
 	return fallback
 }
+
+// IsNotFound reports whether err is a 404 AppError.
+func IsNotFound(err error) bool {
+	return HTTPStatus(err) == 404
+}

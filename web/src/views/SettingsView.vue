@@ -68,8 +68,8 @@
 
     <!-- 刷题偏好 -->
     <QuizPreferenceSection
-      :quiz-count="examStore.settings.quizCount"
-      :quiz-mode="examStore.settings.quizMode"
+      :quiz-count="examStore.quizCount"
+      :quiz-mode="examStore.quizMode"
       @update:quiz-count="examStore.updateQuizCount($event)"
       @update:quiz-mode="examStore.updateQuizMode($event)"
     />

@@ -14,20 +14,14 @@ import (
 
 // ListQuestions 查询题目列表
 func ListQuestions(c *gin.Context) {
+	page, size := validator.ParsePagination(c)
 	filter := service.QuestionFilter{
 		ModuleID:   validator.ParseOptionalUint(c, "module_id"),
 		ExamTypeID: validator.ParseOptionalUint(c, "exam_type_id"),
 		Type:       c.Query("type"),
 		Difficulty: validator.ParseOptionalInt(c, "difficulty", 0),
-		Page:       validator.ParseOptionalInt(c, "page", 1),
-		Size:       validator.ParseOptionalInt(c, "size", 20),
-	}
-
-	if filter.Page < 1 {
-		filter.Page = 1
-	}
-	if filter.Size < 1 || filter.Size > 100 {
-		filter.Size = 20
+		Page:       page,
+		Size:       size,
 	}
 
 	questions, total, err := service.ListQuestions(filter)
@@ -158,46 +152,7 @@ func ImportQuestions(c *gin.Context) {
 		return
 	}
 
-	// Limit import batch size
-	batchLimit := service.GetBatchLimit()
-	if len(questions) > batchLimit {
-		response.Error(c, 400, fmt.Sprintf("单次导入不能超过 %d 道题目", batchLimit))
-		return
-	}
-
-	// Validate and filter each question
-	var validQuestions []model.Question
-	var invalidCount int
-	for _, q := range questions {
-		if q.ModuleID == 0 {
-			invalidCount++
-			continue
-		}
-		if err := validator.ValidateQuestionForImport(&q); err != nil {
-			invalidCount++
-			continue
-		}
-		validQuestions = append(validQuestions, q)
-	}
-
-	if len(validQuestions) == 0 {
-		response.Error(c, 400, "没有有效的题目数据")
-		return
-	}
-
-	// Validate all referenced ModuleIDs exist
-	moduleIDSet := make(map[uint]bool)
-	for _, q := range validQuestions {
-		moduleIDSet[q.ModuleID] = true
-	}
-	for moduleID := range moduleIDSet {
-		if err := service.ValidateModuleExists(moduleID); err != nil {
-			response.HandleError(c, err)
-			return
-		}
-	}
-
-	count, err := service.BatchImportQuestions(validQuestions)
+	result, err := service.ImportQuestions(questions)
 	if err != nil {
 		slog.Error("import questions failed", "error", err)
 		response.HandleError(c, err)
@@ -205,8 +160,8 @@ func ImportQuestions(c *gin.Context) {
 	}
 	response.OK(c, gin.H{
 		"message":       "导入成功",
-		"count":         count,
-		"invalid_count": invalidCount,
+		"count":         result.ImportedCount,
+		"invalid_count": result.InvalidCount,
 	})
 }
 

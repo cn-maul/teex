@@ -16,21 +16,21 @@
           </div>
 
           <!-- 考试类型自定义下拉 -->
-          <div class="exam-selector" v-if="examStore.state.examList.length > 0" ref="dropdownRef">
+          <div class="exam-selector" v-if="examStore.examList.length > 0" ref="dropdownRef">
             <button class="exam-trigger" @click="dropdownOpen = !dropdownOpen">
-              <span class="exam-trigger-text">{{ examStore.state.currentExamName || '选择考试' }}</span>
+              <span class="exam-trigger-text">{{ examStore.currentExamName || '选择考试' }}</span>
               <span class="exam-trigger-arrow" :class="{ open: dropdownOpen }">▾</span>
             </button>
             <Transition name="dropdown">
               <div class="exam-dropdown" v-if="dropdownOpen">
                 <button
-                  v-for="exam in examStore.state.examList"
+                  v-for="exam in examStore.examList"
                   :key="exam.id"
                   class="exam-option"
-                  :class="{ active: exam.id === examStore.state.currentExamId }"
+                  :class="{ active: exam.id === examStore.currentExamId }"
                   @click="selectExam(exam)"
                 >
-                  <span class="exam-option-dot" v-if="exam.id === examStore.state.currentExamId"></span>
+                  <span class="exam-option-dot" v-if="exam.id === examStore.currentExamId"></span>
                   {{ exam.name }}
                 </button>
               </div>
@@ -39,8 +39,8 @@
         </div>
 
         <div class="nav-right">
-          <span class="exam-badge" v-if="examStore.state.currentExamName">
-            {{ examStore.state.currentExamName }}
+          <span class="exam-badge" v-if="examStore.currentExamName">
+            {{ examStore.currentExamName }}
           </span>
         </div>
       </nav>

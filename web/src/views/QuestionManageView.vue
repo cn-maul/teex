@@ -148,7 +148,7 @@ async function batchDelete() {
   await loadQuestions()
 }
 
-watch(() => examStore.state.currentExamId, async () => {
+watch(() => examStore.currentExamId, async () => {
   filter.value.moduleId = ''
   await loadModules()
   currentPage.value = 1
@@ -156,9 +156,9 @@ watch(() => examStore.state.currentExamId, async () => {
 }, { immediate: true })
 
 async function loadModules() {
-  if (!examStore.state.currentExamId) { modules.value = []; return }
+  if (!examStore.currentExamId) { modules.value = []; return }
   try {
-    const res = await getExamModules(examStore.state.currentExamId)
+    const res = await getExamModules(examStore.currentExamId)
     modules.value = res.data.data || []
   } catch (err) {
     console.error('Failed to load modules:', err)
@@ -172,8 +172,8 @@ async function loadQuestions() {
     const params = { page: currentPage.value, size: pageSize }
     if (filter.value.moduleId) {
       params.module_id = filter.value.moduleId
-    } else if (examStore.state.currentExamId) {
-      params.exam_type_id = examStore.state.currentExamId
+    } else if (examStore.currentExamId) {
+      params.exam_type_id = examStore.currentExamId
     }
     if (filter.value.type) params.type = filter.value.type
     if (filter.value.difficulty) params.difficulty = filter.value.difficulty

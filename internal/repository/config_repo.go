@@ -1,17 +1,18 @@
 package repository
 
 import (
-	"exam-quiz/internal/database"
+	"errors"
+
 	"exam-quiz/internal/model"
 	"gorm.io/gorm"
 )
 
 // GetConfig 获取系统配置值
-func GetConfig(key string) (string, error) {
+func GetConfig(db *gorm.DB, key string) (string, error) {
 	var config model.SystemConfig
-	err := database.DB.Where("key = ?", key).First(&config).Error
+	err := db.Where("key = ?", key).First(&config).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", nil
 		}
 		return "", err
@@ -20,6 +21,6 @@ func GetConfig(key string) (string, error) {
 }
 
 // SetConfig 设置系统配置值（不存在则创建）
-func SetConfig(key, value string) error {
-	return database.DB.Where("key = ?", key).Assign(model.SystemConfig{Value: value}).FirstOrCreate(&model.SystemConfig{}).Error
+func SetConfig(db *gorm.DB, key, value string) error {
+	return db.Where("key = ?", key).Assign(model.SystemConfig{Value: value}).FirstOrCreate(&model.SystemConfig{}).Error
 }

@@ -117,10 +117,10 @@ async function loadModules() {
   loading.value = true
   loadError.value = ''
   try {
-    if (examStore.state.examList.length === 0) {
+    if (examStore.examList.length === 0) {
       await examStore.loadExams()
     }
-    const exam = examStore.state.examList.find(e => e.id === parseInt(route.params.id))
+    const exam = examStore.examList.find(e => e.id === parseInt(route.params.id))
     examName.value = exam ? exam.name : '考试'
 
     const res = await getExamModules(route.params.id)

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"errors"
 	"log/slog"
 
 	"exam-quiz/internal/model"
@@ -10,7 +9,6 @@ import (
 	"exam-quiz/internal/validator"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // GetExamTypes 获取所有考试类型
@@ -78,13 +76,6 @@ func UpdateExamType(c *gin.Context) {
 		response.Error(c, 400, "无效的考试类型 ID")
 		return
 	}
-
-	// Check existence
-	if err := service.ValidateExamTypeExists(id); err != nil {
-		response.HandleError(c, err)
-		return
-	}
-
 	var exam model.ExamType
 	if err := c.ShouldBindJSON(&exam); err != nil {
 		response.Error(c, 400, "请求参数无效")
@@ -92,15 +83,8 @@ func UpdateExamType(c *gin.Context) {
 	}
 	exam.ID = id
 
-	// Check name uniqueness (exclude current record)
 	if exam.Name != "" {
-		existing, err := service.GetExamTypeByName(exam.Name)
-		if err == nil && existing.ID != id {
-			response.Error(c, 400, "考试类型名称已存在")
-			return
-		}
-		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-			slog.Error("update exam type name check failed", "error", err)
+		if err := service.CheckExamTypeNameUniqueForUpdate(exam.Name, id); err != nil {
 			response.HandleError(c, err)
 			return
 		}
@@ -121,29 +105,17 @@ func DeleteExamType(c *gin.Context) {
 		response.Error(c, 400, "无效的考试类型 ID")
 		return
 	}
-
-	// Check existence
-	if err := service.ValidateExamTypeExists(id); err != nil {
-		response.HandleError(c, err)
-		return
-	}
-
-	// Count cascade-deletion impact BEFORE the actual delete.
-	modules, questions, answers, countErr := service.CountAffectedByExamType(id)
-	if countErr != nil {
-		slog.Error("count affected by exam type failed", "error", countErr)
-	}
-
-	if err := service.DeleteExamType(id); err != nil {
+	result, err := service.DeleteExamTypeWithStats(id)
+	if err != nil {
 		slog.Error("delete exam type failed", "error", err)
 		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, gin.H{
 		"message":            "删除成功",
-		"affected_modules":   modules,
-		"affected_questions": questions,
-		"affected_answers":   answers,
+		"affected_modules":   result.AffectedModules,
+		"affected_questions": result.AffectedQuestions,
+		"affected_answers":   result.AffectedAnswers,
 	})
 }
 
@@ -187,57 +159,18 @@ func UpdateModule(c *gin.Context) {
 		response.Error(c, 400, "无效的模块 ID")
 		return
 	}
-
-	// Check existence
-	if err := service.ValidateModuleExists(id); err != nil {
-		response.HandleError(c, err)
-		return
-	}
-
 	var module model.Module
 	if err := c.ShouldBindJSON(&module); err != nil {
 		response.Error(c, 400, "请求参数无效")
 		return
 	}
-	module.ID = id
 
-	// 读取现有模块，用于填充未提供的字段
-	existingModule, err := service.GetModule(id)
-	if err != nil {
-		response.HandleError(c, err)
-		return
-	}
-
-	// 如果未提供 exam_type_id，保留原值
-	if module.ExamTypeID == 0 {
-		module.ExamTypeID = existingModule.ExamTypeID
-	}
-
-	// Validate exam_type_id exists
-	if err := service.ValidateExamTypeExists(module.ExamTypeID); err != nil {
-		response.HandleError(c, err)
-		return
-	}
-
-	// Check module name uniqueness under the exam type (exclude current record)
-	if module.Name != "" {
-		existing, err := service.GetModuleByNameAndExamID(module.Name, module.ExamTypeID)
-		if err == nil && existing.ID != id {
-			response.Error(c, 400, "该考试类型下已存在同名模块")
-			return
-		}
-		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-			slog.Error("update module name check failed", "error", err)
-			response.HandleError(c, err)
-			return
-		}
-	}
-
-	if err := service.UpdateModule(&module); err != nil {
+	if err := service.UpdateModuleWithValidation(id, &module); err != nil {
 		slog.Error("update module failed", "error", err)
 		response.HandleError(c, err)
 		return
 	}
+	module.ID = id
 	response.OK(c, module)
 }
 
@@ -248,28 +181,16 @@ func DeleteModule(c *gin.Context) {
 		response.Error(c, 400, "无效的模块 ID")
 		return
 	}
-
-	// Check existence
-	if err := service.ValidateModuleExists(id); err != nil {
-		response.HandleError(c, err)
-		return
-	}
-
-	// Count cascade-deletion impact
-	questions, answers, countErr := service.CountAffectedByModule(id)
-	if countErr != nil {
-		slog.Error("count affected by module failed", "error", countErr)
-	}
-
-	if err := service.DeleteModule(id); err != nil {
+	result, err := service.DeleteModuleWithStats(id)
+	if err != nil {
 		slog.Error("delete module failed", "error", err)
 		response.HandleError(c, err)
 		return
 	}
 	response.OK(c, gin.H{
 		"message":            "删除成功",
-		"affected_questions": questions,
-		"affected_answers":   answers,
+		"affected_questions": result.AffectedQuestions,
+		"affected_answers":   result.AffectedAnswers,
 	})
 }
 

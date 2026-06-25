@@ -19,7 +19,7 @@
     <div v-else class="page-header">
       <div>
         <h1>刷题练习</h1>
-        <p class="page-desc">{{ examStore.state.currentExamName || '请选择考试类型' }}</p>
+        <p class="page-desc">{{ examStore.currentExamName || '请选择考试类型' }}</p>
       </div>
       <div class="quick-stats" v-if="modules.length > 0">
         <div class="quick-stat">
@@ -132,13 +132,13 @@ function getModuleIcon(name) {
 }
 
 async function loadModules() {
-  if (!examStore.state.currentExamId) return
+  if (!examStore.currentExamId) return
   if (!localStorage.getItem('token')) return
   loading.value = true
   try {
     const [modRes, statsRes] = await Promise.all([
-      getExamModules(examStore.state.currentExamId),
-      getExamStats(examStore.state.currentExamId)
+      getExamModules(examStore.currentExamId),
+      getExamStats(examStore.currentExamId)
     ])
     modules.value = modRes.data.data || []
     // Both correctCount and totalAnswered come from the same stats API for consistent scope
@@ -152,7 +152,7 @@ async function loadModules() {
   }
 }
 
-watch(() => examStore.state.currentExamId, () => {
+watch(() => examStore.currentExamId, () => {
   loadModules()
 }, { immediate: true })
 

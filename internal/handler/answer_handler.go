@@ -1,12 +1,9 @@
 package handler
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
 
-	"exam-quiz/internal/cache"
 	"exam-quiz/internal/response"
 	"exam-quiz/internal/service"
 	"exam-quiz/internal/validator"
@@ -28,32 +25,6 @@ func StartQuiz(c *gin.Context) {
 	var req StartQuizRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, 400, "请求参数无效")
-		return
-	}
-
-	if req.Count <= 0 {
-		req.Count = 10
-	}
-	if req.Count > 200 {
-		req.Count = 200
-	}
-	if req.Mode == "" {
-		req.Mode = "default"
-	}
-	if req.Difficulty < 0 || req.Difficulty > 5 {
-		response.Error(c, 400, "难度范围必须在 0-5 之间")
-		return
-	}
-	// Validate mode
-	validModes := map[string]bool{"default": true, "wrong": true, "random": true, "exam": true}
-	if !validModes[req.Mode] {
-		response.Error(c, 400, "无效的刷题模式")
-		return
-	}
-
-	// Validate module exists
-	if err := service.ValidateModuleExists(req.ModuleID); err != nil {
-		response.HandleError(c, err)
 		return
 	}
 
@@ -93,11 +64,6 @@ func SubmitAnswer(c *gin.Context) {
 		return
 	}
 
-	if len(req.UserInput) > 200 {
-		response.Error(c, 400, "答案内容过长")
-		return
-	}
-
 	userID, ok := validator.GetUserID(c)
 	if !ok {
 		return
@@ -126,19 +92,8 @@ func SubmitBatchAnswers(c *gin.Context) {
 		return
 	}
 
-	batchLimit := service.GetBatchLimit()
-	if len(req.Answers) > batchLimit {
-		response.Error(c, 400, fmt.Sprintf("单次提交答案数量不能超过 %d", batchLimit))
-		return
-	}
-
 	userID, ok := validator.GetUserID(c)
 	if !ok {
-		return
-	}
-
-	if req.SessionID == 0 {
-		response.Error(c, 400, "批量提交必须提供有效的考试场次 ID")
 		return
 	}
 
@@ -199,22 +154,12 @@ func ClearAllRecords(c *gin.Context) {
 		response.HandleError(c, err)
 		return
 	}
-	// Clear all caches since clearing records affects all stats
-	cache.InvalidateAll()
 	response.OKWithMessage(c, nil, "记录已清空")
 }
 
 // GetSessions 获取考试场次列表
 func GetSessions(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
-
-	if page < 1 {
-		page = 1
-	}
-	if size < 1 || size > 100 {
-		size = 20
-	}
+	page, size := validator.ParsePagination(c)
 
 	userID, ok := validator.GetUserID(c)
 	if !ok {
@@ -268,14 +213,7 @@ func GetSessionAnswers(c *gin.Context) {
 	sizeStr := c.Query("size")
 
 	if pageStr != "" || sizeStr != "" {
-		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-		size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
-		if page < 1 {
-			page = 1
-		}
-		if size < 1 || size > 100 {
-			size = 20
-		}
+		page, size := validator.ParsePagination(c)
 
 		answers, total, err := service.GetSessionAnswersPaginated(id, page, size, userID)
 		if err != nil {
@@ -303,39 +241,22 @@ func GetDashboardStats(c *gin.Context) {
 		return
 	}
 
-	// Check cache
-	cacheKey := fmt.Sprintf("dashboard_stats:%d", userID)
-	if cached, ok := cache.Get(cacheKey); ok {
-		response.OK(c, cached)
-		return
-	}
-
 	stats, err := service.GetDashboardStats(userID)
 	if err != nil {
 		slog.Error("get dashboard stats failed", "error", err)
 		response.HandleError(c, err)
 		return
 	}
-
-	cache.Set(cacheKey, stats)
 	response.OK(c, stats)
 }
 
 // GetAdminDashboardStats 获取管理员全局数据看板
 func GetAdminDashboardStats(c *gin.Context) {
-	cacheKey := "admin_dashboard_stats"
-	if cached, ok := cache.Get(cacheKey); ok {
-		response.OK(c, cached)
-		return
-	}
-
 	stats, err := service.GetAdminDashboardStats()
 	if err != nil {
 		slog.Error("get admin dashboard stats failed", "error", err)
 		response.HandleError(c, err)
 		return
 	}
-
-	cache.Set(cacheKey, stats)
 	response.OK(c, stats)
 }

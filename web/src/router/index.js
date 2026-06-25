@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
 const routes = [
   { path: '/login', name: 'Login', component: () => import('../views/LoginView.vue'), meta: { public: true } },
@@ -17,36 +18,19 @@ const routes = [
 
 const router = createRouter({ history: createWebHistory(), routes })
 
-// 路由守卫
+// 路由守卫 — 使用 authStore 统一状态源，避免重复解析 localStorage
 router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('token')
-  if (!to.meta.public && !token) {
+  const auth = useAuthStore()
+
+  if (to.meta.public) {
+    // 已登录用户访问登录页 → 重定向首页
+    next(auth.isLoggedIn ? '/' : undefined)
+  } else if (!auth.isLoggedIn) {
     next('/login')
-  } else if (to.path === '/login' && token) {
+  } else if (to.meta.admin && !auth.isAdmin) {
     next('/')
-  } else if (to.path === '/' && token) {
-    // 管理员访问首页时重定向到管理看板
-    try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}')
-      if (user.role === 'admin') {
-        next('/admin/dashboard')
-        return
-      }
-    } catch { /* ignore */ }
-    next()
-  } else if (to.meta.admin) {
-    // 管理页面需要管理员权限
-    try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}')
-      if (user.role !== 'admin') {
-        next('/')
-        return
-      }
-    } catch {
-      next('/')
-      return
-    }
-    next()
+  } else if (to.path === '/' && auth.isAdmin) {
+    next('/admin/dashboard')
   } else {
     next()
   }

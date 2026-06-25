@@ -1,6 +1,5 @@
-import { reactive, ref, computed } from 'vue'
+import { defineStore } from 'pinia'
 
-const token = ref(localStorage.getItem('token') || '')
 function parseUser() {
   try {
     const raw = localStorage.getItem('user')
@@ -10,25 +9,31 @@ function parseUser() {
     return null
   }
 }
-const user = ref(parseUser())
 
-export function useAuthStore() {
-  const isLoggedIn = computed(() => !!token.value)
-  const isAdmin = computed(() => user.value?.role === 'admin')
+export const useAuthStore = defineStore('auth', {
+  state: () => ({
+    token: localStorage.getItem('token') || '',
+    user: parseUser(),
+  }),
 
-  function setAuth(tokenVal, userVal) {
-    token.value = tokenVal
-    user.value = userVal
-    localStorage.setItem('token', tokenVal)
-    localStorage.setItem('user', JSON.stringify(userVal))
-  }
+  getters: {
+    isLoggedIn: (state) => !!state.token,
+    isAdmin: (state) => state.user?.role === 'admin',
+  },
 
-  function logout() {
-    token.value = ''
-    user.value = null
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-  }
+  actions: {
+    setAuth(token, user) {
+      this.token = token
+      this.user = user
+      localStorage.setItem('token', token)
+      localStorage.setItem('user', JSON.stringify(user))
+    },
 
-  return reactive({ isLoggedIn, isAdmin, user, token, setAuth, logout })
-}
+    logout() {
+      this.token = ''
+      this.user = null
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+    },
+  },
+})

@@ -184,9 +184,6 @@ func AdminCreateUser(c *gin.Context) {
 		response.Error(c, 400, "请求参数无效")
 		return
 	}
-	if req.Role == "" {
-		req.Role = "user"
-	}
 	user, err := service.AdminCreateUser(req.Username, req.Password, req.Nickname, req.Role)
 	if err != nil {
 		slog.Error("admin create user failed", "error", err)
@@ -213,10 +210,6 @@ func AdminUpdateUser(c *gin.Context) {
 	var req AdminUpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, 400, "请求参数无效")
-		return
-	}
-	if req.Nickname == "" && req.NewPassword == "" && req.Role == "" {
-		response.Error(c, 400, "请提供需要修改的信息")
 		return
 	}
 	if err := service.AdminUpdateUser(id, req.Nickname, req.NewPassword, req.Role); err != nil {

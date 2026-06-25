@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"exam-quiz/internal/apperr"
-	"exam-quiz/internal/cache"
 	"exam-quiz/internal/database"
 	"exam-quiz/internal/model"
 	"exam-quiz/internal/repository"
@@ -14,78 +13,69 @@ import (
 
 // GetExamTypes returns all exam types (without modules; the frontend fetches modules separately).
 func GetExamTypes() ([]model.ExamType, error) {
-	return repository.ListExamTypes()
+	return repository.ListExamTypes(database.DB, )
 }
 
 // GetExamType returns a single exam type by ID.
 func GetExamType(id uint) (*model.ExamType, error) {
-	return repository.GetExamType(id)
+	return repository.GetExamType(database.DB, id)
 }
 
 // GetModulesByExamID returns the module list for an exam type (with stats, single query).
 func GetModulesByExamID(examTypeID uint, userID uint) ([]model.ModuleWithStats, error) {
-	return repository.GetModulesByExamIDWithStats(examTypeID, userID)
+	return repository.GetModulesByExamIDWithStats(database.DB, examTypeID, userID)
 }
 
 // CreateExamType creates a new exam type.
 func CreateExamType(exam *model.ExamType) error {
-	defer cache.InvalidateAll()
-	return repository.CreateExamType(exam)
+	return repository.CreateExamType(database.DB, exam)
 }
 
 // UpdateExamType updates an existing exam type.
 func UpdateExamType(exam *model.ExamType) error {
-	defer cache.InvalidateAll()
-	return repository.UpdateExamType(exam)
+	return repository.UpdateExamType(database.DB, exam)
 }
 
 // DeleteExamType deletes an exam type and all related data.
 func DeleteExamType(id uint) error {
-	defer cache.InvalidateAll()
-	return repository.DeleteExamType(id)
+	return repository.DeleteExamType(database.DB, id)
 }
 
 // CreateModule creates a new module.
 func CreateModule(module *model.Module) error {
-	defer cache.InvalidateAll()
-	return repository.CreateModule(module)
+	return repository.CreateModule(database.DB, module)
 }
 
 // UpdateModule updates an existing module.
 func UpdateModule(module *model.Module) error {
-	defer cache.InvalidateAll()
-	return repository.UpdateModule(module)
+	return repository.UpdateModule(database.DB, module)
 }
 
 // DeleteModule deletes a module and all related data.
 func DeleteModule(id uint) error {
-	defer cache.InvalidateAll()
-	return repository.DeleteModule(id)
+	return repository.DeleteModule(database.DB, id)
 }
 
-// ValidateExamTypeExists checks that an exam type exists. Returns a user-friendly error if not.
+// ValidateExamTypeExists checks that an exam type exists.
 func ValidateExamTypeExists(id uint) error {
-	_, err := repository.GetExamType(id)
-	if err != nil {
-		return apperr.NotFound("考试类型不存在")
-	}
-	return nil
+	_, err := repository.GetExamType(database.DB, id)
+	return err
 }
 
-// ValidateModuleExists checks that a module exists. Returns a user-friendly error if not.
+// ValidateModuleExists checks that a module exists.
 func ValidateModuleExists(id uint) error {
-	_, err := repository.GetModule(id)
-	if err != nil {
-		return apperr.NotFound("模块不存在")
-	}
-	return nil
+	_, err := repository.GetModule(database.DB, id)
+	return err
 }
 
 // CheckExamTypeNameUnique returns an error if the exam type name already exists.
 func CheckExamTypeNameUnique(name string) error {
-	existing, err := repository.GetExamTypeByName(name)
-	if err != nil && err != gorm.ErrRecordNotFound {
-		return apperr.Internal("查询失败")
+	existing, err := repository.GetExamTypeByName(database.DB, name)
+	if err != nil {
+		if apperr.IsNotFound(err) {
+			return nil // not found = unique
+		}
+		return err
 	}
 	if existing != nil {
 		return apperr.Conflict("该考试类型名称已存在")
@@ -95,9 +85,12 @@ func CheckExamTypeNameUnique(name string) error {
 
 // CheckModuleNameUnique returns an error if the module name already exists under the given exam type.
 func CheckModuleNameUnique(name string, examTypeID uint) error {
-	existing, err := repository.GetModuleByNameAndExamID(name, examTypeID)
-	if err != nil && err != gorm.ErrRecordNotFound {
-		return apperr.Internal("查询失败")
+	existing, err := repository.GetModuleByNameAndExamID(database.DB, name, examTypeID)
+	if err != nil {
+		if apperr.IsNotFound(err) {
+			return nil // not found = unique
+		}
+		return err
 	}
 	if existing != nil {
 		return apperr.Conflict("该考试类型下已存在同名模块")
@@ -105,29 +98,115 @@ func CheckModuleNameUnique(name string, examTypeID uint) error {
 	return nil
 }
 
+// CheckExamTypeNameUniqueForUpdate checks name uniqueness excluding the current record.
+func CheckExamTypeNameUniqueForUpdate(name string, excludeID uint) error {
+	existing, err := repository.GetExamTypeByName(database.DB, name)
+	if err != nil {
+		if apperr.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	if existing != nil && existing.ID != excludeID {
+		return apperr.Conflict("考试类型名称已存在")
+	}
+	return nil
+}
+
+// CheckModuleNameUniqueForUpdate checks module name uniqueness under an exam type, excluding the current record.
+func CheckModuleNameUniqueForUpdate(name string, examTypeID uint, excludeID uint) error {
+	existing, err := repository.GetModuleByNameAndExamID(database.DB, name, examTypeID)
+	if err != nil {
+		if apperr.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	if existing != nil && existing.ID != excludeID {
+		return apperr.Conflict("该考试类型下已存在同名模块")
+	}
+	return nil
+}
+
+// UpdateModuleWithValidation updates a module with field-default and name-uniqueness validation.
+func UpdateModuleWithValidation(id uint, module *model.Module) error {
+	// 读取现有模块，填充未提供的字段
+	existing, err := repository.GetModule(database.DB, id)
+	if err != nil {
+		return err
+	}
+	if module.ExamTypeID == 0 {
+		module.ExamTypeID = existing.ExamTypeID
+	}
+	// 校验 exam_type_id 存在
+	if err := ValidateExamTypeExists(module.ExamTypeID); err != nil {
+		return err
+	}
+	// 名称唯一性检查
+	if module.Name != "" {
+		if err := CheckModuleNameUniqueForUpdate(module.Name, module.ExamTypeID, id); err != nil {
+			return err
+		}
+	}
+	module.ID = id
+	return repository.UpdateModule(database.DB, module)
+}
+
+// DeleteResult holds cascade-deletion impact counts.
+type DeleteResult struct {
+	AffectedModules   int64 `json:"affected_modules,omitempty"`
+	AffectedQuestions int64 `json:"affected_questions"`
+	AffectedAnswers   int64 `json:"affected_answers"`
+}
+
+// DeleteExamTypeWithStats counts affected records then deletes an exam type.
+func DeleteExamTypeWithStats(id uint) (*DeleteResult, error) {
+	modules, questions, answers, _ := repository.CountAffectedByExamType(database.DB, id)
+	if err := repository.DeleteExamType(database.DB, id); err != nil {
+		return nil, err
+	}
+	return &DeleteResult{
+		AffectedModules:   modules,
+		AffectedQuestions: questions,
+		AffectedAnswers:   answers,
+	}, nil
+}
+
+// DeleteModuleWithStats counts affected records then deletes a module.
+func DeleteModuleWithStats(id uint) (*DeleteResult, error) {
+	questions, answers, _ := repository.CountAffectedByModule(database.DB, id)
+	if err := repository.DeleteModule(database.DB, id); err != nil {
+		return nil, err
+	}
+	return &DeleteResult{
+		AffectedQuestions: questions,
+		AffectedAnswers:   answers,
+	}, nil
+}
+
 // GetModule returns a single module by ID.
 func GetModule(id uint) (*model.Module, error) {
-	return repository.GetModule(id)
+	return repository.GetModule(database.DB, id)
 }
 
 // GetExamTypeByName returns an exam type by name.
 func GetExamTypeByName(name string) (*model.ExamType, error) {
-	return repository.GetExamTypeByName(name)
+	return repository.GetExamTypeByName(database.DB, name)
 }
 
 // GetModuleByNameAndExamID returns a module by name and exam type ID.
 func GetModuleByNameAndExamID(name string, examTypeID uint) (*model.Module, error) {
-	return repository.GetModuleByNameAndExamID(name, examTypeID)
+	return repository.GetModuleByNameAndExamID(database.DB, name, examTypeID)
 }
 
 // CountAffectedByExamType counts the cascade-deletion impact for an exam type.
 func CountAffectedByExamType(examTypeID uint) (modules int64, questions int64, answers int64, err error) {
-	return repository.CountAffectedByExamType(examTypeID)
+	return repository.CountAffectedByExamType(database.DB, examTypeID)
 }
 
 // CountAffectedByModule counts the cascade-deletion impact for a module.
 func CountAffectedByModule(moduleID uint) (questions int64, answers int64, err error) {
-	return repository.CountAffectedByModule(moduleID)
+	return repository.CountAffectedByModule(database.DB, moduleID)
 }
 
 // FullImportData is the top-level structure for full data import.
@@ -162,12 +241,12 @@ type FullImportResult struct {
 
 // ExportAllData exports all exam types, modules, and questions.
 func ExportAllData() (map[string]interface{}, error) {
-	exams, err := repository.ListExamTypes()
+	exams, err := repository.ListExamTypes(database.DB, )
 	if err != nil {
 		return nil, err
 	}
 	// Fetch all modules in a single query, grouped by exam_type_id
-	allModules, err := repository.ListAllModules()
+	allModules, err := repository.ListAllModules(database.DB, )
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +258,7 @@ func ExportAllData() (map[string]interface{}, error) {
 		exams[i].Modules = moduleMap[exams[i].ID]
 	}
 
-	questions, err := repository.ListAllQuestions()
+	questions, err := repository.ListAllQuestions(database.DB, )
 	if err != nil {
 		return nil, err
 	}
@@ -275,50 +354,27 @@ func ImportFullData(data FullImportData) (*FullImportResult, error) {
 		return result, err
 	}
 
-	cache.InvalidateAll()
 	return result, nil
 }
 
-// GetModuleStats returns module-level statistics (cached).
+// GetModuleStats returns module-level statistics.
 func GetModuleStats(moduleID uint, userID uint) (*repository.StatsResult, error) {
-	cacheKey := fmt.Sprintf("module_stats:%d:%d", moduleID, userID)
-	if cached, ok := cache.Get(cacheKey); ok {
-		return cached.(*repository.StatsResult), nil
-	}
-
-	stats, err := repository.GetModuleStats(moduleID, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	cache.Set(cacheKey, stats)
-	return stats, nil
+	return repository.GetModuleStats(database.DB, moduleID, userID)
 }
 
-// GetOverallStats returns global statistics (cached).
+// GetOverallStats returns global statistics.
 func GetOverallStats(userID uint) (*repository.StatsResult, error) {
-	cacheKey := fmt.Sprintf("overall_stats:%d", userID)
-	if cached, ok := cache.Get(cacheKey); ok {
-		return cached.(*repository.StatsResult), nil
-	}
-
-	stats, err := repository.GetOverallStats(userID)
-	if err != nil {
-		return nil, err
-	}
-
-	cache.Set(cacheKey, stats)
-	return stats, nil
+	return repository.GetOverallStats(database.DB, userID)
 }
 
 // GetRecentAnswers returns recent answer records for a user.
 func GetRecentAnswers(limit int, userID uint) ([]model.UserAnswer, error) {
-	return repository.GetRecentAnswers(limit, userID)
+	return repository.GetRecentAnswers(database.DB, limit, userID)
 }
 
 // ClearAllRecords clears all answer records for a user.
 func ClearAllRecords(userID uint) error {
-	return repository.ClearAllRecords(userID)
+	return repository.ClearAllRecords(database.DB, userID)
 }
 
 // ExamModuleStats holds a module with its full statistics.
@@ -334,7 +390,7 @@ type ExamModuleStats struct {
 
 // GetExamStats returns per-module stats for an entire exam type in a single call.
 func GetExamStats(examTypeID uint, userID uint) ([]ExamModuleStats, error) {
-	rows, err := repository.GetExamStatsAggregated(examTypeID, userID)
+	rows, err := repository.GetExamStatsAggregated(database.DB, examTypeID, userID)
 	if err != nil {
 		return nil, err
 	}

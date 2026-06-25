@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"exam-quiz/internal/repository"
+	"exam-quiz/internal/database"
 )
 
 const (
@@ -20,7 +21,7 @@ const (
 
 // GetBatchLimit 获取批量操作上限（导入/删除/提交）
 func GetBatchLimit() int {
-	val, err := repository.GetConfig(batchLimitKey)
+	val, err := repository.GetConfig(database.DB, batchLimitKey)
 	if err != nil || val == "" {
 		return defaultBatchLimit
 	}
@@ -36,12 +37,12 @@ func SetBatchLimit(limit int) error {
 	if limit < minBatchLimit || limit > maxBatchLimit {
 		return fmt.Errorf("批量操作上限必须在 %d ~ %d 之间", minBatchLimit, maxBatchLimit)
 	}
-	return repository.SetConfig(batchLimitKey, strconv.Itoa(limit))
+	return repository.SetConfig(database.DB, batchLimitKey, strconv.Itoa(limit))
 }
 
 // GetGeneralRateLimit 获取每分钟通用请求频率限制
 func GetGeneralRateLimit() int {
-	val, err := repository.GetConfig(generalRateLimitKey)
+	val, err := repository.GetConfig(database.DB, generalRateLimitKey)
 	if err != nil || val == "" {
 		return defaultGeneralRateLimit
 	}
@@ -57,5 +58,5 @@ func SetGeneralRateLimit(limit int) error {
 	if limit < minGeneralRateLimit || limit > maxGeneralRateLimit {
 		return fmt.Errorf("请求频率限制必须在 %d ~ %d 之间", minGeneralRateLimit, maxGeneralRateLimit)
 	}
-	return repository.SetConfig(generalRateLimitKey, strconv.Itoa(limit))
+	return repository.SetConfig(database.DB, generalRateLimitKey, strconv.Itoa(limit))
 }

@@ -101,102 +101,23 @@
 
     <!-- ========== 考试模式：交卷后的结果 ========== -->
     <div v-else-if="quizMode === 'exam' && showExamResults" class="finished">
-      <div class="finished-card">
-        <div class="finished-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="48" height="48" color="var(--success)">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-            <polyline points="22 4 12 14.01 9 11.01"></polyline>
-          </svg>
-        </div>
-        <h2>考试完成</h2>
-        <div class="result-ring">
-          <svg viewBox="0 0 120 120">
-            <circle class="ring-bg" cx="60" cy="60" r="50"></circle>
-            <circle
-              class="ring-fill"
-              cx="60" cy="60" r="50"
-              :style="{ strokeDasharray: 314, strokeDashoffset: 314 - (314 * examAccuracy / 100) }"
-            ></circle>
-          </svg>
-          <div class="ring-value">
-            <span class="ring-number">{{ examAccuracy }}</span>
-            <span class="ring-unit">%</span>
-          </div>
-        </div>
-        <div class="result-stats">
-          <div class="result-item">
-            <span class="result-value total">{{ questions.length }}</span>
-            <span class="result-label">总题数</span>
-          </div>
-          <div class="result-divider"></div>
-          <div class="result-item">
-            <span class="result-value success">{{ examCorrect }}</span>
-            <span class="result-label">正确</span>
-          </div>
-          <div class="result-divider"></div>
-          <div class="result-item">
-            <span class="result-value error">{{ examWrong }}</span>
-            <span class="result-label">错误</span>
-          </div>
-          <div class="result-divider"></div>
-          <div class="result-item">
-            <span class="result-value" style="color: var(--text-muted);">{{ examUnanswered }}</span>
-            <span class="result-label">未答</span>
-          </div>
-        </div>
-        <div class="result-chart-section">
-          <h3 class="chart-title">题型分布</h3>
-          <div class="chart-container-sm">
-            <Doughnut :data="typeChartData" :options="doughnutOptions" />
-          </div>
-        </div>
-        <div class="result-chart-section">
-          <h3 class="chart-title">难度正确率</h3>
-          <div class="chart-container-sm">
-            <Bar :data="examDifficultyChartData" :options="barOptions" />
-          </div>
-        </div>
-      </div>
+      <QuizResultCard
+        title="考试完成"
+        :total="questions.length"
+        :correct="examCorrect"
+        :wrong="examWrong"
+        :unanswered="examUnanswered"
+        :accuracy="examAccuracy"
+        :type-chart-data="typeChartData"
+        :difficulty-chart-data="examDifficultyChartData"
+        :show-unanswered="true"
+      />
 
-      <!-- 全部题目的解析 -->
-      <div class="exam-analysis-list">
-        <h3 class="analysis-title">题目解析</h3>
-        <div
-          v-for="(q, idx) in questions"
-          :key="q.id"
-          class="analysis-item"
-          :class="{ 'analysis-correct': examResults[idx]?.is_correct, 'analysis-wrong': examResults[idx] && !examResults[idx].is_correct, 'analysis-unanswered': !examResults[idx] }"
-        >
-          <div class="analysis-header">
-            <span class="analysis-number">{{ idx + 1 }}</span>
-            <span class="analysis-type">{{ getTypeLabel(q.type) }}</span>
-            <span class="analysis-status" v-if="!examResults[idx]">未作答</span>
-            <span class="analysis-status status-correct" v-else-if="examResults[idx].is_correct">✓ 正确</span>
-            <span class="analysis-status status-wrong" v-else>✗ 错误</span>
-          </div>
-          <div class="analysis-content">{{ q.content }}</div>
-          <div class="analysis-detail">
-            <span class="analysis-user-answer" v-if="examResults[idx]">你的答案：<strong>{{ examResults[idx].user_input || '（未作答）' }}</strong></span>
-            <span class="analysis-correct-answer">正确答案：<strong>{{ q.answer }}</strong></span>
-          </div>
-          <div class="analysis-explanation" v-if="q.analysis">{{ q.analysis }}</div>
-          <div class="analysis-options">
-            <div
-              v-for="(option, oi) in parseOptions(q.options)"
-              :key="oi"
-              class="analysis-option"
-              :class="{
-                'aopt-selected': isExamOptionSelected(idx, option),
-                'aopt-correct': isExamOptionCorrect(idx, option),
-                'aopt-wrong': isExamOptionSelected(idx, option) && !isExamOptionCorrect(idx, option)
-              }"
-            >
-              <span class="aopt-letter">{{ getOptionLetter(option) }}</span>
-              <span class="aopt-text">{{ getOptionText(option) }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <QuizAnalysisList
+        :questions="questions"
+        :results="examResults"
+        :is-exam-mode="true"
+      />
 
       <div class="finished-actions">
         <button class="btn btn-primary" @click="restartQuiz">再来一轮</button>
@@ -208,96 +129,20 @@
     <template v-else-if="quizMode === 'analysis'">
       <!-- 解析模式完成页 -->
       <div v-if="finished" class="finished">
-        <div class="finished-card">
-          <div class="finished-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="48" height="48" color="var(--success)">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-              <polyline points="22 4 12 14.01 9 11.01"></polyline>
-            </svg>
-          </div>
-          <h2>刷题完成</h2>
-          <div class="result-ring">
-            <svg viewBox="0 0 120 120">
-              <circle class="ring-bg" cx="60" cy="60" r="50"></circle>
-              <circle
-                class="ring-fill"
-                cx="60" cy="60" r="50"
-                :style="{ strokeDasharray: 314, strokeDashoffset: 314 - (314 * accuracy / 100) }"
-              ></circle>
-            </svg>
-            <div class="ring-value">
-              <span class="ring-number">{{ accuracy }}</span>
-              <span class="ring-unit">%</span>
-            </div>
-          </div>
-          <div class="result-stats">
-            <div class="result-item">
-              <span class="result-value total">{{ questions.length }}</span>
-              <span class="result-label">总题数</span>
-            </div>
-            <div class="result-divider"></div>
-            <div class="result-item">
-              <span class="result-value success">{{ correctCount }}</span>
-              <span class="result-label">正确</span>
-            </div>
-            <div class="result-divider"></div>
-            <div class="result-item">
-              <span class="result-value error">{{ wrongCount }}</span>
-              <span class="result-label">错误</span>
-            </div>
-          </div>
-          <div class="result-chart-section">
-            <h3 class="chart-title">题型分布</h3>
-            <div class="chart-container-sm">
-              <Doughnut :data="typeChartData" :options="doughnutOptions" />
-            </div>
-          </div>
-          <div class="result-chart-section">
-            <h3 class="chart-title">难度正确率</h3>
-            <div class="chart-container-sm">
-              <Bar :data="analysisDifficultyChartData" :options="barOptions" />
-            </div>
-          </div>
-        </div>
+        <QuizResultCard
+          title="刷题完成"
+          :total="questions.length"
+          :correct="correctCount"
+          :wrong="wrongCount"
+          :accuracy="accuracy"
+          :type-chart-data="typeChartData"
+          :difficulty-chart-data="analysisDifficultyChartData"
+        />
 
-        <!-- 全部题目的解析 -->
-        <div class="exam-analysis-list">
-          <h3 class="analysis-title">题目解析</h3>
-          <div
-            v-for="(q, idx) in questions"
-            :key="q.id"
-            class="analysis-item"
-            :class="{ 'analysis-correct': analysisResults[idx]?.is_correct, 'analysis-wrong': analysisResults[idx] && !analysisResults[idx].is_correct }"
-          >
-            <div class="analysis-header">
-              <span class="analysis-number">{{ idx + 1 }}</span>
-              <span class="analysis-type">{{ getTypeLabel(q.type) }}</span>
-              <span class="analysis-status status-correct" v-if="analysisResults[idx]?.is_correct">✓ 正确</span>
-              <span class="analysis-status status-wrong" v-else-if="analysisResults[idx]">✗ 错误</span>
-            </div>
-            <div class="analysis-content">{{ q.content }}</div>
-            <div class="analysis-detail">
-              <span class="analysis-user-answer" v-if="analysisResults[idx]">你的答案：<strong>{{ analysisResults[idx].user_input }}</strong></span>
-              <span class="analysis-correct-answer">正确答案：<strong>{{ q.answer }}</strong></span>
-            </div>
-            <div class="analysis-explanation" v-if="q.analysis">{{ q.analysis }}</div>
-            <div class="analysis-options">
-              <div
-                v-for="(option, oi) in parseOptions(q.options)"
-                :key="oi"
-                class="analysis-option"
-                :class="{
-                  'aopt-selected': getAnalysisSelected(idx) === getOptionLetter(option),
-                  'aopt-correct': getOptionLetter(option) === q.answer,
-                  'aopt-wrong': getAnalysisSelected(idx) === getOptionLetter(option) && getOptionLetter(option) !== q.answer
-                }"
-              >
-                <span class="aopt-letter">{{ getOptionLetter(option) }}</span>
-                <span class="aopt-text">{{ getOptionText(option) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <QuizAnalysisList
+          :questions="questions"
+          :results="analysisResults"
+        />
 
         <div class="finished-actions">
           <button class="btn btn-primary" @click="restartQuiz">再来一轮</button>
@@ -391,7 +236,8 @@ import { getTypeLabel, parseOptions, getOptionLetter, getOptionText } from '../u
 import { showToast } from '../utils/toast'
 import { calcAccuracy } from '../utils/format'
 import { useConfirm } from '../utils/confirm'
-import { Doughnut, Bar } from 'vue-chartjs'
+import QuizResultCard from '../components/quiz/QuizResultCard.vue'
+import QuizAnalysisList from '../components/quiz/QuizAnalysisList.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -412,7 +258,7 @@ if (authStore.isAdmin) {
 }
 // 只允许 'analysis' 或 'exam'，其他值一律回退到 'analysis'
 const quizMode = computed(() => {
-  const mode = examStore.settings.quizMode
+  const mode = examStore.quizMode
   return mode === 'exam' || mode === 'analysis' ? mode : 'analysis'
 })
 
@@ -548,43 +394,6 @@ const analysisDifficultyChartData = computed(() => {
   }
 })
 
-const doughnutOptions = {
-  responsive: true,
-  maintainAspectRatio: true,
-  plugins: {
-    legend: {
-      position: 'bottom',
-      labels: { padding: 12, usePointStyle: true, pointStyleWidth: 8, font: { size: 12 } }
-    }
-  },
-  cutout: '60%'
-}
-
-const barOptions = {
-  responsive: true,
-  maintainAspectRatio: true,
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      callbacks: {
-        label: (ctx) => `正确率: ${ctx.raw}%`
-      }
-    }
-  },
-  scales: {
-    y: {
-      beginAtZero: true,
-      max: 100,
-      ticks: { callback: (v) => v + '%', font: { size: 11 } },
-      grid: { color: 'rgba(0,0,0,0.05)' }
-    },
-    x: {
-      ticks: { font: { size: 11 } },
-      grid: { display: false }
-    }
-  }
-}
-
 // ====== 生命周期 ======
 
 onMounted(async () => {
@@ -675,7 +484,7 @@ async function loadQuestions() {
   }
   try {
     const mode = route.query.mode || 'default'
-    const count = examStore.settings.quizCount || 10
+    const count = examStore.quizCount || 10
     const difficulty = parseInt(route.query.difficulty) || 0
     const moduleId = parseInt(route.params.moduleId)
     if (!moduleId || isNaN(moduleId)) {
@@ -809,13 +618,6 @@ function nextQuestion() {
   } else {
     finished.value = true
   }
-}
-
-// 解析模式结果页获取某题的选项
-function getAnalysisSelected(idx) {
-  const result = analysisResults.value[idx]
-  if (!result) return ''
-  return result.user_input || ''
 }
 
 // ====== 考试模式可视范围优化 ======
@@ -1064,299 +866,11 @@ async function restartQuiz() {
 }
 
 /* ====== Finished card ====== */
-.finished-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  padding: 2.5rem 2rem;
-  margin-bottom: 2rem;
-}
-
-.finished-icon {
-  margin-bottom: 0.75rem;
-}
-
-.finished-card h2 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 1.5rem;
-}
-
-.result-ring {
-  position: relative;
-  width: 140px;
-  height: 140px;
-  margin: 0 auto 1.5rem;
-}
-
-.result-ring svg {
-  transform: rotate(-90deg);
-  width: 100%;
-  height: 100%;
-}
-
-.ring-bg {
-  fill: none;
-  stroke: var(--border);
-  stroke-width: 8;
-}
-
-.ring-fill {
-  fill: none;
-  stroke: var(--primary);
-  stroke-width: 8;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 1s ease;
-}
-
-.ring-value {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.ring-number {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.ring-unit {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.result-stats {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 2rem;
-}
-
-.result-item {
-  text-align: center;
-}
-
-.result-value {
-  display: block;
-  font-size: 1.75rem;
-  font-weight: 700;
-}
-
-.result-value.total { color: var(--text); }
-.result-value.success { color: var(--success); }
-.result-value.error { color: var(--error); }
-
-.result-label {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  margin-top: 0.1rem;
-}
-
-.result-divider {
-  width: 1px;
-  height: 2.5rem;
-  background: var(--border);
-}
-
-.result-chart-section {
-  margin-top: 1.5rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border-light);
-}
-
-.chart-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 0.75rem;
-  text-align: center;
-}
-
-.chart-container-sm {
-  max-width: 320px;
-  margin: 0 auto;
-}
-
 .finished-actions {
   display: flex;
   gap: 0.75rem;
   justify-content: center;
   margin-top: 2rem;
-}
-
-/* ====== Analysis list (shared between modes) ====== */
-.exam-analysis-list {
-  text-align: left;
-  margin-top: 1rem;
-}
-
-.analysis-title {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 1rem;
-  text-align: left;
-  padding-left: 0.25rem;
-}
-
-.analysis-item {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 1.25rem;
-  margin-bottom: 1rem;
-}
-
-.analysis-correct {
-  border-left: 4px solid var(--success);
-}
-
-.analysis-wrong {
-  border-left: 4px solid var(--error);
-}
-
-.analysis-unanswered {
-  border-left: 4px solid var(--text-muted);
-  opacity: 0.8;
-}
-
-.analysis-header {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.6rem;
-}
-
-.analysis-number {
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-hover);
-  border-radius: 50%;
-  font-weight: 700;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
-
-.analysis-type {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  background: var(--bg-hover);
-  padding: 0.1rem 0.45rem;
-  border-radius: 10px;
-}
-
-.analysis-status {
-  font-size: 0.8rem;
-  font-weight: 600;
-  margin-left: auto;
-}
-
-.status-correct { color: var(--success); }
-.status-wrong { color: var(--error); }
-
-.analysis-content {
-  font-size: 0.92rem;
-  line-height: 1.6;
-  color: var(--text);
-  margin-bottom: 0.5rem;
-  white-space: pre-wrap;
-}
-
-.analysis-detail {
-  display: flex;
-  gap: 1.25rem;
-  font-size: 0.82rem;
-  color: var(--text-secondary);
-  margin-bottom: 0.4rem;
-}
-
-.analysis-user-answer {
-  color: var(--text-secondary);
-}
-
-.analysis-correct-answer {
-  color: var(--success);
-}
-
-.analysis-explanation {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  line-height: 1.5;
-  background: var(--bg-hover);
-  padding: 0.6rem 0.8rem;
-  border-radius: var(--radius-sm);
-  margin-bottom: 0.6rem;
-}
-
-/* Analysis options */
-.analysis-options {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.analysis-option {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  padding: 0.45rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 0.85rem;
-}
-
-.aopt-letter {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-hover);
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
-
-.aopt-selected.aopt-correct {
-  border-color: var(--success);
-  background: var(--success-bg);
-}
-.aopt-selected.aopt-correct .aopt-letter {
-  background: var(--success);
-  color: white;
-}
-
-.aopt-selected.aopt-wrong {
-  border-color: var(--error);
-  background: var(--error-bg);
-}
-.aopt-selected.aopt-wrong .aopt-letter {
-  background: var(--error);
-  color: white;
-}
-
-.aopt-correct:not(.aopt-selected) {
-  border-color: var(--success);
-  border-style: dashed;
-}
-.aopt-correct:not(.aopt-selected) .aopt-letter {
-  background: var(--success);
-  color: white;
-}
-
-.aopt-text {
-  flex: 1;
-  color: var(--text);
 }
 
 /* ====== Exam mode ====== */

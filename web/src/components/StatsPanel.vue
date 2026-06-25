@@ -1,6 +1,6 @@
 <template>
   <aside class="stats-panel">
-    <div v-if="!examStore.state.currentExamId" class="stats-empty">
+    <div v-if="!examStore.currentExamId" class="stats-empty">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32" color="var(--text-muted)">
         <path d="M18 20V10"></path><path d="M12 20V4"></path><path d="M6 20v-6"></path>
       </svg>
@@ -16,7 +16,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" color="var(--primary)">
           <path d="M18 20V10"></path><path d="M12 20V4"></path><path d="M6 20v-6"></path>
         </svg>
-        <span>{{ examStore.state.currentExamName }}</span>
+        <span>{{ examStore.currentExamName }}</span>
       </div>
 
       <!-- 总览卡片 -->
@@ -121,7 +121,7 @@ const radarOptions = {
   }
 }
 
-watch(() => examStore.state.currentExamId, async (id) => {
+watch(() => examStore.currentExamId, async (id) => {
   if (!id) {
     moduleStats.value = []
     summary.value = { total: 0, answered: 0, accuracy: 0, unanswered: 0 }
@@ -132,8 +132,8 @@ watch(() => examStore.state.currentExamId, async (id) => {
 
 // 从答题/考试页返回时刷新统计数据（避免每次路由变化都请求）
 watch(() => route.path, async (newPath, oldPath) => {
-  if (examStore.state.currentExamId && oldPath?.startsWith('/quiz')) {
-    await loadStats(examStore.state.currentExamId)
+  if (examStore.currentExamId && oldPath?.startsWith('/quiz')) {
+    await loadStats(examStore.currentExamId)
   }
 })
 

@@ -41,12 +41,19 @@ export function parseOptions(optionsStr) {
 
 /**
  * 获取选项字母（如 "A"）
- * @param {string} option - 选项字符串（如 "A. 选项内容"）
+ * 支持多种格式: "A. xxx", "A、xxx", "A) xxx", "（A）xxx", "A xxx"
+ * @param {string} option - 选项字符串
  * @returns {string}
  */
 export function getOptionLetter(option) {
   if (!option) return ''
-  return option.charAt(0)
+  // Match a leading ASCII letter followed by a common delimiter or whitespace
+  const match = option.trim().match(/^([A-Za-z])\s*[.、)）:\s]/)
+  if (match) return match[1].toUpperCase()
+  // Fallback: option might be just a bare letter
+  const trimmed = option.trim()
+  if (/^[A-Za-z]$/.test(trimmed)) return trimmed.toUpperCase()
+  return trimmed.charAt(0)
 }
 
 /**

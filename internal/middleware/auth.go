@@ -6,6 +6,7 @@ import (
 
 	"exam-quiz/internal/repository"
 	"exam-quiz/internal/response"
+	"exam-quiz/internal/database"
 	"exam-quiz/internal/util"
 
 	"github.com/gin-gonic/gin"
@@ -94,7 +95,7 @@ func AdminRequired() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		user, err := repository.GetUserByID(userID)
+		user, err := repository.GetUserByID(database.DB, userID)
 		if err != nil || user.Role != "admin" {
 			response.Error(c, http.StatusForbidden, "需要管理员权限")
 			c.Abort()

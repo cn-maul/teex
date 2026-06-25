@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { showToast } from '../utils/toast.js'
+import { useAuthStore } from '../stores/auth'
 
 const api = axios.create({
   baseURL: '/api',
@@ -32,9 +33,9 @@ api.interceptors.response.use(
       // 登录接口本身返回 401 时不触发重定向，只让调用方处理错误
       const isLoginRequest = error.config?.url?.includes('/auth/login')
       if (!isLoginRequest) {
-        // 清除认证状态
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
+        // 清除认证状态（同步 store + localStorage）
+        const authStore = useAuthStore()
+        authStore.logout()
         // 防止循环重定向：只跳转一次
         if (!isRedirectingToLogin) {
           isRedirectingToLogin = true
