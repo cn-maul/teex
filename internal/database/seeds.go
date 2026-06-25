@@ -2,10 +2,8 @@ package database
 
 import (
 	_ "embed"
-	"crypto/rand"
 	"fmt"
 	"log/slog"
-	"math/big"
 	"os"
 
 	"exam-quiz/internal/model"
@@ -28,6 +26,8 @@ func Seed() error {
 		// 数据库已初始化，但仍需确保管理员账户存在
 		ensureAdmin()
 		ensureRegistrationConfig()
+		ensureBatchLimitConfig()
+		ensureGeneralRateLimitConfig()
 		fmt.Println("Database already seeded, skipping...")
 		return nil
 	}
@@ -48,6 +48,8 @@ func Seed() error {
 
 	ensureAdmin()
 	ensureRegistrationConfig()
+	ensureBatchLimitConfig()
+	ensureGeneralRateLimitConfig()
 	return nil
 }
 
@@ -85,26 +87,29 @@ func ensureAdmin() {
 	}
 }
 
-// generateRandomPassword creates a cryptographically random password of the given length
-// using uppercase, lowercase, digits, and a safe special character set.
-func generateRandomPassword(length int) (string, error) {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*"
-	result := make([]byte, length)
-	for i := range result {
-		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-		if err != nil {
-			return "", fmt.Errorf("failed to generate random bytes: %w", err)
-		}
-		result[i] = charset[n.Int64()]
-	}
-	return string(result), nil
-}
-
 func ensureRegistrationConfig() {
 	var count int64
 	DB.Model(&model.SystemConfig{}).Where("key = ?", "registration_enabled").Count(&count)
 	if count == 0 {
 		DB.Create(&model.SystemConfig{Key: "registration_enabled", Value: "false"})
 		fmt.Println("Registration disabled by default (set via admin settings).")
+	}
+}
+
+func ensureBatchLimitConfig() {
+	var count int64
+	DB.Model(&model.SystemConfig{}).Where("key = ?", "batch_limit").Count(&count)
+	if count == 0 {
+		DB.Create(&model.SystemConfig{Key: "batch_limit", Value: "500"})
+		fmt.Println("Batch limit set to 500 by default (set via admin settings).")
+	}
+}
+
+func ensureGeneralRateLimitConfig() {
+	var count int64
+	DB.Model(&model.SystemConfig{}).Where("key = ?", "general_rate_limit").Count(&count)
+	if count == 0 {
+		DB.Create(&model.SystemConfig{Key: "general_rate_limit", Value: "120"})
+		fmt.Println("General rate limit set to 120 req/min by default (set via admin settings).")
 	}
 }

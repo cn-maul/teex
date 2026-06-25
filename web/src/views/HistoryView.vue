@@ -170,11 +170,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { Line, Bar } from 'vue-chartjs'
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler } from 'chart.js'
 import { getSessions, getSessionAnswers } from '../api'
-import { formatDuration, getAccuracyColor, formatRelativeTime } from '../utils/format'
-
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler)
+import { formatDuration, getAccuracyColor, formatRelativeTime, calcAccuracy } from '../utils/format'
 
 const sessions = ref([])
 const total = ref(0)
@@ -197,7 +194,7 @@ const accuracyTrendData = computed(() => {
     }),
     datasets: [{
       label: '正确率',
-      data: recent.map(s => s.total_count > 0 ? Math.round(s.correct_count / s.total_count * 100) : 0),
+      data: recent.map(s => calcAccuracy(s.correct_count, s.total_count)),
       borderColor: '#6366f1',
       backgroundColor: 'rgba(99, 102, 241, 0.08)',
       borderWidth: 2,

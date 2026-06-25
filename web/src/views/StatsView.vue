@@ -126,9 +126,6 @@ import { getDashboardStats } from '../api'
 import { TYPE_LABELS } from '../utils/quiz'
 import { getAccuracyColor } from '../utils/format'
 import { Line, Bar, Radar } from 'vue-chartjs'
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, RadialLinearScale, Filler, Tooltip, Legend } from 'chart.js'
-
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, RadialLinearScale, Filler, Tooltip, Legend)
 
 const loading = ref(true)
 const error = ref('')

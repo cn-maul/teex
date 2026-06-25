@@ -282,8 +282,27 @@ async function handleImport(event) {
     const text = await file.text()
     const data = JSON.parse(text)
     if (!Array.isArray(data)) { showToast('JSON 格式错误：需要是一个数组', 'error'); return }
+
+    // 前端校验字段
+    const requiredFields = ['module_id', 'content', 'type', 'answer']
+    const validTypes = new Set(['single', 'multiple', 'judge', 'fill', 'essay'])
+    let invalidCount = 0
+    for (const item of data) {
+      if (!requiredFields.every(f => item[f] !== undefined && item[f] !== '')) { invalidCount++; continue }
+      if (!validTypes.has(item.type)) { invalidCount++; continue }
+    }
+    if (invalidCount > 0 && invalidCount === data.length) {
+      showToast(`全部 ${data.length} 道题目校验失败，请检查字段（module_id/content/type/answer）`, 'error')
+      event.target.value = ''
+      return
+    }
+
     const count = data.length
-    if (!await showConfirm({ message: `即将导入 ${count} 道题目，确定吗？` })) return
+    const warn = invalidCount > 0 ? `（${invalidCount} 道格式不正确将被跳过）` : ''
+    if (!await showConfirm({ message: `即将导入 ${count} 道题目${warn}，确定吗？` })) {
+      event.target.value = ''
+      return
+    }
     try {
       const res = await importQuestions(data)
       const imported = res.data?.data?.count ?? count

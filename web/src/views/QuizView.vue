@@ -389,14 +389,15 @@ import { useExamStore } from '../stores/exam'
 import { useAuthStore } from '../stores/auth'
 import { getTypeLabel, parseOptions, getOptionLetter, getOptionText } from '../utils/quiz'
 import { showToast } from '../utils/toast'
+import { calcAccuracy } from '../utils/format'
+import { useConfirm } from '../utils/confirm'
 import { Doughnut, Bar } from 'vue-chartjs'
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js'
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
 
 const route = useRoute()
 const router = useRouter()
 const examStore = useExamStore()
 const authStore = useAuthStore()
+const { showConfirm } = useConfirm()
 
 // ====== 通用状态 ======
 const questions = ref([])
@@ -450,11 +451,7 @@ const progressPercent = computed(() => {
   }
   return ((currentIndex.value + 1) / questions.value.length) * 100
 })
-const accuracy = computed(() => {
-  const total = correctCount.value + wrongCount.value
-  if (total === 0) return 0
-  return Math.round((correctCount.value / total) * 100)
-})
+const accuracy = computed(() => calcAccuracy(correctCount.value, correctCount.value + wrongCount.value))
 
 const parsedOptions = computed(() => {
   return parseOptions(currentQuestion.value.options)
@@ -915,6 +912,11 @@ function selectExamOption(idx, option) {
 
 async function submitExam() {
   if (answeredCount.value === 0 || submitting.value) return
+  const unanswered = questions.value.length - answeredCount.value
+  const msg = unanswered > 0
+    ? `还有 ${unanswered} 题未作答，确定要交卷吗？`
+    : '确定要交卷吗？'
+  if (!await showConfirm({ message: msg })) return
   submitting.value = true
 
   // 构建批量提交数据（将总时间均分给每道已答题）

@@ -18,14 +18,20 @@
 
     <!-- 系统设置（仅管理员） -->
     <AdminSection
-      v-if="authStore.user?.role === 'admin'"
+      v-if="authStore.isAdmin"
       :registration-enabled="registrationEnabled"
       :registration-loading="registrationLoading"
+      :batch-limit="batchLimit"
+      :batch-limit-saving="batchLimitSaving"
+      :rate-limit="rateLimit"
+      :rate-limit-saving="rateLimitSaving"
       @toggle-registration="toggleRegistration"
+      @save-batch-limit="saveBatchLimit"
+      @save-rate-limit="saveRateLimit"
     />
 
-    <!-- 个人概览 -->
-    <div class="settings-section">
+    <!-- 个人概览（仅普通用户） -->
+    <div v-if="!authStore.isAdmin" class="settings-section">
       <div class="section-header">
         <h2>个人概览</h2>
         <p class="section-desc">你的刷题数据</p>
@@ -69,7 +75,7 @@
     />
 
     <!-- 数据管理 -->
-    <DataSection @clear-data="confirmClearData" />
+    <DataSection v-if="!authStore.isAdmin" @clear-data="confirmClearData" />
   </div>
 </template>
 
@@ -77,7 +83,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useExamStore } from '../stores/exam'
 import { useAuthStore } from '../stores/auth.js'
-import { deleteRecords, getStats, updateProfile, changePassword, getRegistrationStatus, setRegistrationStatus } from '../api'
+import { deleteRecords, getStats, updateProfile, changePassword, getRegistrationStatus, setRegistrationStatus, getBatchLimit, setBatchLimit, getRateLimit, setRateLimit } from '../api'
 import { showToast } from '../utils/toast'
 import { useConfirm } from '../utils/confirm'
 import ProfileSection from '../components/settings/ProfileSection.vue'
@@ -86,9 +92,6 @@ import AdminSection from '../components/settings/AdminSection.vue'
 import QuizPreferenceSection from '../components/settings/QuizPreferenceSection.vue'
 import DataSection from '../components/settings/DataSection.vue'
 import { Doughnut } from 'vue-chartjs'
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
-
-ChartJS.register(ArcElement, Tooltip, Legend)
 
 const { showConfirm } = useConfirm()
 
@@ -106,6 +109,14 @@ const newNickname = ref('')
 // 注册开关
 const registrationEnabled = ref(false)
 const registrationLoading = ref(true)
+
+// 批量操作上限
+const batchLimit = ref(500)
+const batchLimitSaving = ref(false)
+
+// 请求频率限制
+const rateLimit = ref(120)
+const rateLimitSaving = ref(false)
 
 // 密码修改状态
 const passwordSaved = ref(false)
@@ -150,13 +161,23 @@ onMounted(async () => {
     statsLoading.value = false
   }
 
-  if (authStore.user?.role === 'admin') {
+  if (authStore.isAdmin) {
     try {
       const regRes = await getRegistrationStatus()
       registrationEnabled.value = regRes.data.data?.enabled ?? false
     } catch { /* ignore */ } finally {
       registrationLoading.value = false
     }
+
+    try {
+      const limitRes = await getBatchLimit()
+      batchLimit.value = limitRes.data.data?.limit ?? 500
+    } catch { /* ignore */ }
+
+    try {
+      const rlRes = await getRateLimit()
+      rateLimit.value = rlRes.data.data?.limit ?? 120
+    } catch { /* ignore */ }
   }
 })
 
@@ -168,6 +189,40 @@ async function toggleRegistration() {
     showToast(newVal ? '注册已开放' : '注册已关闭')
   } catch (e) {
     showToast(e.response?.data?.error || '操作失败', 'error')
+  }
+}
+
+async function saveBatchLimit(val) {
+  if (val < 1 || val > 10000) {
+    showToast('批量操作上限必须在 1 ~ 10000 之间', 'error')
+    return
+  }
+  batchLimitSaving.value = true
+  try {
+    await setBatchLimit({ limit: val })
+    batchLimit.value = val
+    showToast('批量操作上限已更新')
+  } catch (e) {
+    showToast(e.response?.data?.error || '操作失败', 'error')
+  } finally {
+    batchLimitSaving.value = false
+  }
+}
+
+async function saveRateLimit(val) {
+  if (val < 10 || val > 10000) {
+    showToast('请求频率限制必须在 10 ~ 10000 之间', 'error')
+    return
+  }
+  rateLimitSaving.value = true
+  try {
+    await setRateLimit({ limit: val })
+    rateLimit.value = val
+    showToast('请求频率限制已更新')
+  } catch (e) {
+    showToast(e.response?.data?.error || '操作失败', 'error')
+  } finally {
+    rateLimitSaving.value = false
   }
 }
 

@@ -109,7 +109,7 @@ func SubmitAnswer(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": result})
+	response.OK(c, result)
 }
 
 // SubmitBatchAnswersRequest 批量提交答案请求
@@ -126,8 +126,9 @@ func SubmitBatchAnswers(c *gin.Context) {
 		return
 	}
 
-	if len(req.Answers) > 500 {
-		response.Error(c, 400, "答案数量超出限制")
+	batchLimit := service.GetBatchLimit()
+	if len(req.Answers) > batchLimit {
+		response.Error(c, 400, fmt.Sprintf("单次提交答案数量不能超过 %d", batchLimit))
 		return
 	}
 
@@ -148,7 +149,7 @@ func SubmitBatchAnswers(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": results})
+	response.OK(c, results)
 }
 
 // GetStats 获取统计数据

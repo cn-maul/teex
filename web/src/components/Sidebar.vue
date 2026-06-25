@@ -15,14 +15,14 @@
         <span class="sidebar-label">历史记录</span>
       </router-link>
 
-      <router-link to="/stats" class="sidebar-item">
+      <router-link to="/stats" class="sidebar-item" v-if="!authStore.isAdmin">
         <span class="sidebar-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"></path><path d="M12 20V4"></path><path d="M6 20v-6"></path></svg>
         </span>
         <span class="sidebar-label">学习统计</span>
       </router-link>
 
-      <template v-if="authStore.user?.role === 'admin'">
+      <template v-if="authStore.isAdmin">
         <div class="sidebar-divider"></div>
 
         <router-link to="/admin/exams" class="sidebar-item">

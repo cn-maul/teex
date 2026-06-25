@@ -19,6 +19,7 @@ type visitor struct {
 type RateLimiterConfig struct {
 	MaxRequests int
 	Window      time.Duration
+	DynamicMax  func() int // if set, called on each request to get the current max
 }
 
 // allVisitors tracks all rate limiter instances for a shared cleanup goroutine.
@@ -114,11 +115,20 @@ func RateLimiter(cfg RateLimiterConfig) gin.HandlerFunc {
 		v.mu.Unlock()
 
 		if count > cfg.MaxRequests {
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error": "请求过于频繁，请稍后再试",
-			})
-			c.Abort()
-			return
+			// Determine effective limit: use dynamic value if available, otherwise static
+			effectiveMax := cfg.MaxRequests
+			if cfg.DynamicMax != nil {
+				if dyn := cfg.DynamicMax(); dyn > 0 {
+					effectiveMax = dyn
+				}
+			}
+			if count > effectiveMax {
+				c.JSON(http.StatusTooManyRequests, gin.H{
+					"error": "请求过于频繁，请稍后再试",
+				})
+				c.Abort()
+				return
+			}
 		}
 
 		c.Next()

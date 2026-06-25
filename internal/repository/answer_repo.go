@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"fmt"
 	"log/slog"
 	"math"
 	"time"
@@ -468,18 +469,26 @@ func GetAdminDashboardStats() (*AdminDashboardStats, error) {
 	stats := &AdminDashboardStats{}
 
 	// 1. 系统概览
-	database.DB.Model(&model.User{}).Count(&stats.TotalUsers)
-	database.DB.Model(&model.Question{}).Count(&stats.TotalQuestions)
+	if err := database.DB.Model(&model.User{}).Count(&stats.TotalUsers).Error; err != nil {
+		return nil, fmt.Errorf("count users: %w", err)
+	}
+	if err := database.DB.Model(&model.Question{}).Count(&stats.TotalQuestions).Error; err != nil {
+		return nil, fmt.Errorf("count questions: %w", err)
+	}
 
-	database.DB.Model(&model.UserAnswer{}).
+	if err := database.DB.Model(&model.UserAnswer{}).
 		Where("created_at >= DATE('now', '-7 days')").
-		Distinct("user_id").Count(&stats.ActiveUsers7d)
-	database.DB.Model(&model.UserAnswer{}).
+		Distinct("user_id").Count(&stats.ActiveUsers7d).Error; err != nil {
+		return nil, fmt.Errorf("count active users 7d: %w", err)
+	}
+	if err := database.DB.Model(&model.UserAnswer{}).
 		Where("created_at >= DATE('now', '-30 days')").
-		Distinct("user_id").Count(&stats.ActiveUsers30d)
+		Distinct("user_id").Count(&stats.ActiveUsers30d).Error; err != nil {
+		return nil, fmt.Errorf("count active users 30d: %w", err)
+	}
 
 	// 总答题数和正确数（基于每题最后一次作答）
-	database.DB.Raw(`
+	if err := database.DB.Raw(`
 		SELECT COUNT(*) FROM (
 			SELECT ua.is_correct
 			FROM user_answers ua
@@ -489,8 +498,10 @@ func GetAdminDashboardStats() (*AdminDashboardStats, error) {
 				GROUP BY user_id, question_id
 			) latest ON ua.id = latest.max_id
 		)
-	`).Scan(&stats.TotalAnswers)
-	database.DB.Raw(`
+	`).Scan(&stats.TotalAnswers).Error; err != nil {
+		return nil, fmt.Errorf("count total answers: %w", err)
+	}
+	if err := database.DB.Raw(`
 		SELECT COUNT(*) FROM (
 			SELECT ua.is_correct
 			FROM user_answers ua
@@ -501,14 +512,16 @@ func GetAdminDashboardStats() (*AdminDashboardStats, error) {
 			) latest ON ua.id = latest.max_id
 			WHERE ua.is_correct = 1
 		)
-	`).Scan(&stats.TotalCorrect)
+	`).Scan(&stats.TotalCorrect).Error; err != nil {
+		return nil, fmt.Errorf("count total correct: %w", err)
+	}
 	if stats.TotalAnswers > 0 {
 		stats.Accuracy = math.Round(float64(stats.TotalCorrect) / float64(stats.TotalAnswers) * 100)
 	}
 
 	// 2. 每日趋势（近 30 天）
 	var dailyResults []AdminDailyStat
-	database.DB.Raw(`
+	if err := database.DB.Raw(`
 		SELECT DATE(created_at) as date,
 			COUNT(*) as count,
 			SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) as correct,
@@ -517,7 +530,9 @@ func GetAdminDashboardStats() (*AdminDashboardStats, error) {
 		WHERE created_at >= DATE('now', '-30 days')
 		GROUP BY DATE(created_at)
 		ORDER BY date ASC
-	`).Scan(&dailyResults)
+	`).Scan(&dailyResults).Error; err != nil {
+		return nil, fmt.Errorf("daily stats: %w", err)
+	}
 	stats.DailyStats = dailyResults
 
 	// 3. 全局题型统计（每题最后一次作答）
@@ -529,7 +544,7 @@ func GetAdminDashboardStats() (*AdminDashboardStats, error) {
 		ModuleName string
 	}
 	var lastAnswers []lastRow
-	database.DB.Raw(`
+	if err := database.DB.Raw(`
 		SELECT ua.is_correct, q.type, q.difficulty, q.module_id, m.name AS module_name
 		FROM user_answers ua
 		INNER JOIN (
@@ -539,7 +554,9 @@ func GetAdminDashboardStats() (*AdminDashboardStats, error) {
 		) latest ON ua.id = latest.max_id
 		INNER JOIN questions q ON ua.question_id = q.id
 		LEFT JOIN modules m ON q.module_id = m.id
-	`).Scan(&lastAnswers)
+	`).Scan(&lastAnswers).Error; err != nil {
+		return nil, fmt.Errorf("accuracy stats: %w", err)
+	}
 
 	typeAccMap := make(map[string]*TypeAccuracy)
 	diffAccMap := make(map[int]*DifficultyAccuracy)
@@ -577,7 +594,7 @@ func GetAdminDashboardStats() (*AdminDashboardStats, error) {
 
 	// 4. Top 10 活跃用户
 	var topUsers []AdminUserSummary
-	database.DB.Raw(`
+	if err := database.DB.Raw(`
 		SELECT ua.user_id, u.username, u.nickname,
 			COUNT(*) as total_answered,
 			SUM(CASE WHEN ua.is_correct THEN 1 ELSE 0 END) as correct_count,
@@ -588,7 +605,9 @@ func GetAdminDashboardStats() (*AdminDashboardStats, error) {
 		GROUP BY ua.user_id, u.username, u.nickname
 		ORDER BY total_answered DESC
 		LIMIT 10
-	`).Scan(&topUsers)
+	`).Scan(&topUsers).Error; err != nil {
+		return nil, fmt.Errorf("top users: %w", err)
+	}
 	stats.TopUsers = topUsers
 
 	return stats, nil

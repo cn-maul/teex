@@ -4,9 +4,11 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"exam-quiz/internal/handler"
 	"exam-quiz/internal/middleware"
+	"exam-quiz/internal/service"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -61,8 +63,13 @@ func Setup() *gin.Engine {
 	}
 
 	// 普通用户可访问（仅需登录）
+	generalLimitCfg := middleware.RateLimiterConfig{
+		MaxRequests: 120,
+		Window:      time.Minute,
+		DynamicMax:  service.GetGeneralRateLimit,
+	}
 	api := r.Group("/api")
-	api.Use(middleware.RateLimiter(middleware.GeneralRateLimit))
+	api.Use(middleware.RateLimiter(generalLimitCfg))
 	{
 		// 用户信息
 		api.GET("/profile", middleware.AuthRequired(), handler.GetProfile)
@@ -98,6 +105,8 @@ func Setup() *gin.Engine {
 
 		// 系统设置
 		api.GET("/settings/registration", handler.GetRegistrationStatus)
+		api.GET("/settings/batch-limit", middleware.AuthRequired(), handler.GetBatchLimit)
+		api.GET("/settings/rate-limit", middleware.AuthRequired(), handler.GetGeneralRateLimit)
 
 		// 考试管理（管理员）
 		api.POST("/exams", middleware.AuthRequired(), middleware.AdminRequired(), handler.CreateExamType)
@@ -128,6 +137,8 @@ func Setup() *gin.Engine {
 
 		// 系统设置（管理员）
 		api.PUT("/settings/registration", middleware.AuthRequired(), middleware.AdminRequired(), handler.SetRegistrationStatus)
+		api.PUT("/settings/batch-limit", middleware.AuthRequired(), middleware.AdminRequired(), handler.SetBatchLimit)
+		api.PUT("/settings/rate-limit", middleware.AuthRequired(), middleware.AdminRequired(), handler.SetGeneralRateLimit)
 
 		// 管理员数据看板
 		api.GET("/admin/dashboard", middleware.AuthRequired(), middleware.AdminRequired(), handler.GetAdminDashboardStats)

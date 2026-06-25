@@ -74,9 +74,7 @@ import { useRoute } from 'vue-router'
 import { getExamStats } from '../api'
 import { useExamStore } from '../stores/exam'
 import { Radar } from 'vue-chartjs'
-import { Chart as ChartJS, RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend } from 'chart.js'
-
-ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
+// Chart.js 已在 main.js 统一注册
 
 const examStore = useExamStore()
 const route = useRoute()
@@ -132,9 +130,9 @@ watch(() => examStore.state.currentExamId, async (id) => {
   await loadStats(id)
 }, { immediate: true })
 
-// 从答题页返回时刷新统计数据
-watch(() => route.path, async () => {
-  if (examStore.state.currentExamId) {
+// 从答题/考试页返回时刷新统计数据（避免每次路由变化都请求）
+watch(() => route.path, async (newPath, oldPath) => {
+  if (examStore.state.currentExamId && oldPath?.startsWith('/quiz')) {
     await loadStats(examStore.state.currentExamId)
   }
 })

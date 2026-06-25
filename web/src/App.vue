@@ -48,10 +48,10 @@
       <!-- 主体布局 -->
       <div class="layout">
         <Sidebar />
-        <main class="main-content">
+        <main class="main-content" :class="{ 'no-stats-panel': authStore.isAdmin }">
           <router-view />
         </main>
-        <StatsPanel />
+        <StatsPanel v-if="!authStore.isAdmin" />
       </div>
     </template>
 
@@ -281,5 +281,9 @@ function selectExam(exam) {
   margin-left: 220px;
   margin-right: 260px;
   padding: 1.75rem 2rem;
+}
+
+.main-content.no-stats-panel {
+  margin-right: 0;
 }
 </style>

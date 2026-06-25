@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"log/slog"
 
 	"exam-quiz/internal/model"
@@ -158,8 +159,9 @@ func ImportQuestions(c *gin.Context) {
 	}
 
 	// Limit import batch size
-	if len(questions) > 500 {
-		response.Error(c, 400, "单次导入不能超过 500 道题目")
+	batchLimit := service.GetBatchLimit()
+	if len(questions) > batchLimit {
+		response.Error(c, 400, fmt.Sprintf("单次导入不能超过 %d 道题目", batchLimit))
 		return
 	}
 
@@ -217,8 +219,9 @@ func BatchDeleteQuestions(c *gin.Context) {
 		response.Error(c, 400, "请求参数无效")
 		return
 	}
-	if len(req.IDs) > 500 {
-		response.Error(c, 400, "单次删除不能超过 500 道题目")
+	batchLimit := service.GetBatchLimit()
+	if len(req.IDs) > batchLimit {
+		response.Error(c, 400, fmt.Sprintf("单次删除不能超过 %d 道题目", batchLimit))
 		return
 	}
 	if len(req.IDs) == 0 {

@@ -122,5 +122,9 @@ export const adminDeleteUser = (id) => api.delete(`/users/${id}`)
 // 系统设置
 export const getRegistrationStatus = () => api.get('/settings/registration')
 export const setRegistrationStatus = (data) => api.put('/settings/registration', data)
+export const getBatchLimit = () => api.get('/settings/batch-limit')
+export const setBatchLimit = (data) => api.put('/settings/batch-limit', data)
+export const getRateLimit = () => api.get('/settings/rate-limit')
+export const setRateLimit = (data) => api.put('/settings/rate-limit', data)
 
 export default api

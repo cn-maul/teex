@@ -92,6 +92,7 @@ import { useRouter } from 'vue-router'
 import { getExamModules, getExamStats } from '../api'
 import { useExamStore } from '../stores/exam'
 import { useAuthStore } from '../stores/auth'
+import { calcAccuracy } from '../utils/format'
 
 const router = useRouter()
 const examStore = useExamStore()
@@ -104,11 +105,7 @@ const examAnswered = ref(0)
 
 const totalQuestions = computed(() => modules.value.reduce((s, m) => s + (m.question_count || 0), 0))
 const totalAnswered = computed(() => examAnswered.value)
-const overallAccuracy = computed(() => {
-  const total = totalAnswered.value
-  if (total === 0) return 0
-  return Math.round(correctCount.value / total * 100)
-})
+const overallAccuracy = computed(() => calcAccuracy(correctCount.value, totalAnswered.value))
 const completionRate = computed(() => {
   const total = totalQuestions.value
   if (total === 0) return 0
